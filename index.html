@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#020a1f">
+    <title>PHANTOM VPN ZONE</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        :root {
+            --p: #3b82f6;
+            --p2: #1d4ed8;
+            --cy: #38bdf8;
+            --deep: #020a1f;
+            --glass: rgba(20, 52, 120, 0.30);
+            --glass-hi: rgba(255, 255, 255, 0.08);
+            --line: rgba(125, 170, 255, 0.20);
+            --text: #eaf2ff;
+            --muted: #93a9cf;
+        }
+        * { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; box-sizing: border-box; }
+        html { background: #020a1f; }
+        body {
+            background: linear-gradient(180deg, #051636 0%, #020a1f 55%, #010510 100%);
+            min-height: 100vh;
+            color: var(--text);
+            padding-bottom: 110px;
+            overflow-x: hidden;
+        }
+
+        /* Anti-lag ambient background: 2 gradient layers moved with transform only (GPU), no canvas, no blur filter */
+        #bg-glow { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; contain: layout paint; }
+        #bg-glow i { position: absolute; width: 120vmax; height: 120vmax; border-radius: 50%; will-change: transform; transform: translate3d(0,0,0); }
+        #bg-glow i:nth-child(1) { top: -72vmax; right: -62vmax; background: radial-gradient(circle, rgba(37, 99, 235, 0.42), transparent 62%); animation: drift1 28s ease-in-out infinite alternate; }
+        #bg-glow i:nth-child(2) { bottom: -78vmax; left: -72vmax; background: radial-gradient(circle, rgba(14, 165, 233, 0.26), transparent 62%); animation: drift2 34s ease-in-out infinite alternate; }
+        @keyframes drift1 { to { transform: translate3d(-8vmax, 10vmax, 0); } }
+        @keyframes drift2 { to { transform: translate3d(10vmax, -8vmax, 0); } }
+        @media (prefers-reduced-motion: reduce) { #bg-glow i { animation: none; } }
+
+        .max-w-md, header, main, nav, .modal { position: relative; z-index: 1; }
+        header h1 { color: #fff; text-shadow: 0 0 26px rgba(59, 130, 246, 0.55); }
+
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at center, #0a2a6b 0%, #020a1f 60%, #010510 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+            color: #fff;
+        }
+        .loader-ring {
+            width: 54px;
+            height: 54px;
+            border: 4px solid rgba(255,255,255,0.12);
+            border-top: 4px solid #60a5fa;
+            border-right: 4px solid rgba(96, 165, 250, 0.55);
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Glass card */
+        .card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03)), var(--glass);
+            -webkit-backdrop-filter: blur(14px) saturate(150%);
+            backdrop-filter: blur(14px) saturate(150%);
+            border-radius: 24px;
+            padding: 16px;
+            border: 1px solid var(--line);
+            position: relative;
+            box-shadow: 0 14px 34px -16px rgba(0, 8, 30, 0.9), inset 0 1px 0 rgba(255,255,255,0.16);
+            color: var(--text);
+        }
+        .card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            background: linear-gradient(135deg, rgba(255,255,255,0.10), transparent 38%, rgba(56,189,248,0.07));
+        }
+        .card > * { position: relative; z-index: 1; }
+        /* Nested/long lists: skip blur so scrolling stays smooth */
+        .sheet .card, #admin-panel .card, #vpn-list .card, #user-orders .card { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(145deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03)), rgba(16, 44, 104, 0.55); }
+
+        .btn-p {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 55%, #1e3a8a 100%);
+            color: #fff;
+            width: 100%;
+            padding: 16px;
+            border-radius: 20px;
+            font-weight: 800;
+            font-size: 14px;
+            box-shadow: 0 12px 26px -12px rgba(59, 130, 246, 0.85), inset 0 1px 0 rgba(255,255,255,0.22);
+            border: 1px solid rgba(255,255,255,0.14);
+            transition: transform .2s ease;
+        }
+        .btn-p:active { transform: scale(0.98); }
+        .btn-reject {
+            background: rgba(244, 63, 94, 0.12);
+            color: #fb7185;
+            border: 1px solid rgba(244, 63, 94, 0.28);
+            width: 100%;
+            padding: 12px;
+            border-radius: 18px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .acc-box {
+            background: rgba(2, 10, 31, 0.45);
+            border: 1.5px dashed rgba(125, 170, 255, 0.35);
+            border-radius: 14px;
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+        }
+        .acc-label { font-size: 9px; font-weight: 800; color: #93c5fd; text-transform: uppercase; letter-spacing: 0.5px; }
+        .acc-value { font-family: 'monospace'; font-size: 11px; font-weight: 700; color: #fff; }
+
+        .adm-nav { display: flex; background: rgba(2, 10, 31, 0.5); padding: 5px; border-radius: 18px; margin-bottom: 15px; gap: 4px; overflow-x: auto; border: 1px solid var(--line); }
+        .adm-tab { flex: 1; min-width: 90px; padding: 12px 8px; font-size: 10px; font-weight: 800; color: var(--muted); border-radius: 14px; text-align: center; white-space: nowrap; }
+        .adm-tab-active { background: linear-gradient(135deg, #3b82f6, #1e40af); color: #fff; box-shadow: 0 8px 18px rgba(37, 99, 235, 0.35); }
+
+        .modal { position: fixed; inset: 0; background: rgba(1, 6, 20, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); z-index: 6000; display: none; align-items: flex-end; justify-content: center; }
+        .sheet {
+            background: linear-gradient(180deg, rgba(22, 56, 128, 0.78) 0%, rgba(4, 14, 40, 0.96) 100%);
+            -webkit-backdrop-filter: blur(18px);
+            backdrop-filter: blur(18px);
+            width: 100%;
+            max-width: 450px;
+            border-radius: 35px 35px 0 0;
+            padding: 30px;
+            animation: slideUp 0.3s;
+            max-height: 85vh;
+            overflow-y: auto;
+            color: #fff;
+            border: 1px solid var(--line);
+            border-bottom: 0;
+            box-shadow: 0 -18px 50px rgba(37, 99, 235, 0.18), inset 0 1px 0 rgba(255,255,255,0.14);
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .adm-mini-input {
+            width: 100%;
+            background: rgba(2, 10, 31, 0.45);
+            border: 1px solid rgba(125, 170, 255, 0.24);
+            border-radius: 12px;
+            padding: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            outline: none;
+            color: #fff;
+        }
+        .adm-mini-input option { background: #07183f; color: #fff; }
+        .adm-mini-input::placeholder, #trx-id::placeholder { color: rgba(234, 242, 255, 0.4); }
+        .adm-mini-input:focus, #trx-id:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16); }
+
+        .vpn-img, .pay-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            object-fit: contain;
+            padding: 4px;
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(147, 197, 253, 0.35);
+            box-shadow: 0 8px 18px rgba(0, 8, 30, 0.35);
+        }
+        .logo-img { object-fit: contain; background: rgba(255,255,255,0.94); padding: 3px; border: 1px solid rgba(147,197,253,0.35); }
+        .logo-up {
+            flex: none;
+            width: 40px;
+            height: 40px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background: rgba(59, 130, 246, 0.18);
+            border: 1px solid rgba(125, 170, 255, 0.35);
+            color: #93c5fd;
+            cursor: pointer;
+        }
+        .disabled-card { opacity: 0.45; pointer-events: none; filter: grayscale(1); }
+
+        .pay-card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 14px 10px;
+            min-height: 96px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: #fff;
+            transition: transform .2s ease, border-color .2s ease, background .2s ease;
+        }
+        .pay-card:active, .pay-card.active { transform: scale(0.97); border-color: #60a5fa; background: rgba(59, 130, 246, 0.2); }
+        .pay-logo-wrap { width: 46px; height: 46px; position: relative; display: grid; place-items: center; }
+        .pay-logo-wrap .pay-logo { width: 46px; height: 46px; border-radius: 14px; }
+        .pay-logo-fallback {
+            display: none;
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            place-items: center;
+            background: linear-gradient(135deg, #3b82f6, #1e3a8a);
+            color: #fff;
+            font-weight: 900;
+            border: 1px solid rgba(255,255,255,0.14);
+        }
+        .active-method-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(59, 130, 246, 0.16);
+            border: 1px solid rgba(125, 170, 255, 0.3);
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .switch { position: relative; display: inline-block; width: 34px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; inset: 0; background-color: #1e3a6e; transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: #3b82f6; }
+        input:checked + .slider:before { transform: translateX(14px); }
+
+        nav { background: rgba(4, 16, 46, 0.72) !important; -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%); border-color: var(--line) !important; box-shadow: 0 -12px 32px rgba(0, 8, 30, 0.5), inset 0 1px 0 rgba(255,255,255,0.08); }
+        #admin-panel { background: linear-gradient(180deg, #051636 0%, #020a1f 100%) !important; color: #fff; }
+        #user-profile-card { background: linear-gradient(135deg, rgba(30, 64, 175, 0.85) 0%, rgba(37, 99, 235, 0.55) 55%, rgba(56, 189, 248, 0.4) 100%) !important; border: 1px solid rgba(255,255,255,0.18) !important; box-shadow: 0 22px 44px -22px rgba(37, 99, 235, 0.9), inset 0 1px 0 rgba(255,255,255,0.25) !important; }
+        #trx-id { background: rgba(2, 10, 31, 0.45); border-color: rgba(125, 170, 255, 0.3); color: #fff; }
+        hr { border-color: rgba(125, 170, 255, 0.2); }
+
+        /* Remap the light-theme utility classes used in the markup to glass */
+        .bg-white, .bg-slate-50, .bg-slate-100 { background-color: rgba(255, 255, 255, 0.06) !important; color: #fff !important; }
+        .bg-indigo-50 { background-color: rgba(59, 130, 246, 0.16) !important; color: #fff !important; border: 1px solid rgba(125, 170, 255, 0.26); }
+        .text-indigo-600, .text-indigo-700, .text-indigo-500, .text-indigo-400 { color: #60a5fa !important; }
+        .text-slate-400, .text-slate-500, .text-slate-600 { color: #93a9cf !important; }
+        .text-emerald-500, .text-emerald-600 { color: #34d399 !important; }
+        .bg-emerald-50 { background-color: rgba(52, 211, 153, 0.14) !important; }
+        .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14) !important; }
+        .border, .border-t, .border-b, .border-2 { border-color: rgba(125, 170, 255, 0.22) !important; }
+
+        .admin-empty {
+            padding: 20px;
+            border: 1px dashed rgba(125, 170, 255, 0.3);
+            border-radius: 18px;
+            text-align: center;
+            color: #93a9cf;
+            font-size: 11px;
+            font-weight: 800;
+            background: rgba(255,255,255,0.04);
+        }
+        .admin-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.18);
+            color: #93c5fd;
+            border: 1px solid rgba(125, 170, 255, 0.28);
+        }
+
+        /* Admin panel must stay above user panel and nav. */
+        #admin-panel {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 9000 !important;
+            width: 100% !important;
+            height: 100vh !important;
+        }
+        #admin-panel.hidden { display: none !important; }
+        #admin-panel:not(.hidden) { display: flex !important; }
+        #admin-btn-nav { pointer-events: auto !important; position: relative; z-index: 1100; }
+
+        .swal2-popup { background: rgba(6, 22, 58, 0.94) !important; color: #fff !important; border: 1px solid var(--line); border-radius: 24px !important; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+        .swal2-confirm { background: linear-gradient(135deg, #3b82f6, #1e40af) !important; border-radius: 14px !important; }
+        .swal2-cancel { background: rgba(255,255,255,0.12) !important; border-radius: 14px !important; }
+    </style>
+</head>
+<body>
+
+    <div id="bg-glow"><i></i><i></i></div>
+
+    <div id="loading-screen">
+        <div class="loader-ring"></div>
+        <p class="mt-4 font-bold text-slate-400 text-sm tracking-widest animate-pulse uppercase">Phantom VPN Zone</p>
+    </div>
+
+    <div class="max-w-md mx-auto">
+        <header class="p-6 flex justify-between items-center">
+            <h1 class="font-black text-2xl tracking-tighter italic">PHANTOM<span class="text-indigo-600">VPN-ZONE</span></h1>
+            <div id="p-count-badge" class="hidden bg-rose-500 text-white text-[10px] font-black px-2 py-1 rounded-full animate-bounce">0</div>
+        </header>
+
+        <main class="p-5 space-y-5">
+            <div id="user-profile-card" class="card bg-gradient-to-br from-indigo-600 to-blue-700 border-none p-7 text-white shadow-2xl shadow-indigo-200">
+                <div class="flex items-center gap-5">
+                    <img id="u-pic" class="w-16 h-16 rounded-[22px] border-2 border-white/30 shadow-lg" src="">
+                    <div>
+                        <h2 id="u-nickname" class="text-xl font-black tracking-tight">...</h2>
+                        <p id="display-uid" class="text-[10px] font-bold opacity-70 tracking-widest mt-1 uppercase"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="store-page" class="page-content space-y-4">
+                <div id="vpn-list" class="space-y-3"></div>
+            </div>
+
+            <div id="history-page" class="page-content hidden space-y-3">
+                <h3 class="font-black text-lg mb-2">My Orders</h3>
+                <div id="user-orders" class="space-y-3"></div>
+            </div>
+
+            <div id="help-page" class="page-content hidden text-center card py-12">
+                <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-5"><i class="fa-brands fa-telegram text-5xl text-indigo-500"></i></div>
+                <h4 class="font-black text-xl">Contact Support</h4>
+                <a id="support-link" href="#" target="_blank" class="btn-p block mt-8">Message Admin</a>
+            </div>
+        </main>
+
+        <nav class="fixed bottom-0 w-full max-w-md bg-white/80 backdrop-blur-xl border-t h-20 flex justify-around items-center z-[1000]">
+            <button onclick="nav('store', this)" class="nav-btn text-indigo-600 flex flex-col items-center gap-1 font-bold text-[10px]"><i class="fa-solid fa-store text-xl"></i>Store</button>
+            <button onclick="nav('history', this)" class="nav-btn text-slate-400 flex flex-col items-center gap-1 font-bold text-[10px]"><i class="fa-solid fa-box text-xl"></i>Orders</button>
+            <button onclick="nav('help', this)" class="nav-btn text-slate-400 flex flex-col items-center gap-1 font-bold text-[10px]"><i class="fa-solid fa-headset text-xl"></i>Help</button>
+            <button type="button" id="admin-btn-nav" onclick="openAdmin()" class="hidden text-slate-400 flex flex-col items-center gap-1 font-bold text-[10px]"><i class="fa-solid fa-user-shield text-xl"></i>Admin</button>
+        </nav>
+    </div>
+
+    <div id="admin-panel" class="fixed inset-0 bg-slate-50 z-[5000] hidden flex flex-col">
+        <div class="p-6 flex justify-between items-center bg-white border-b gap-3">
+            <div>
+                <h2 class="font-black text-xl">Admin Control</h2>
+                <p id="admin-status" class="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">Checking admin access...</p>
+            </div>
+            <div class="flex gap-2 items-center">
+                <button onclick="forceRefreshAdmin()" class="w-10 h-10 bg-slate-100 rounded-full font-bold text-xs" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+                <button onclick="closeAdmin()" class="w-10 h-10 bg-slate-100 rounded-full font-bold">&times;</button>
+            </div>
+        </div>
+        <div class="p-4 bg-white">
+            <div class="adm-nav">
+                <button onclick="admTab('pending', this)" class="adm-tab adm-tab-active">PENDING (<span id="p-count">0</span>)</button>
+                <button onclick="admTab('stock', this)" class="adm-tab">STOCK MGMT</button>
+                <button onclick="admTab('settings', this)" class="adm-tab">VPN MGMT</button>
+            </div>
+        </div>
+        <div class="p-5 overflow-y-auto flex-1 pb-24">
+            <div id="adm-pending" class="adm-content space-y-4"></div>
+            <div id="adm-stock" class="adm-content hidden space-y-6">
+                <div class="card space-y-3">
+                    <b class="text-xs">Add to Stock</b>
+                    <input type="text" id="stock-email" placeholder="Email / ID" class="adm-mini-input">
+                    <input type="text" id="stock-pass" placeholder="Password" class="adm-mini-input">
+                    <select id="stock-vpn-id" class="adm-mini-input"></select>
+                    <button onclick="addStock()" class="btn-p py-3 text-xs">Save Stock</button>
+                </div>
+                <div id="stock-inventory-list" class="space-y-3"></div>
+            </div>
+            <div id="adm-settings" class="adm-content hidden space-y-6">
+                <div class="card space-y-3">
+                    <b class="text-[10px] uppercase">General Settings</b>
+                    <input type="text" id="set-support-url" placeholder="Support Telegram Link" class="adm-mini-input">
+                    <button onclick="saveSupport()" class="btn-p py-2 text-xs">Save Link</button>
+                    <hr>
+                    <div class="flex gap-2"><input type="text" id="pay-name" placeholder="Bkash" class="w-1/2 adm-mini-input"><input type="text" id="pay-num-in" placeholder="Number" class="w-1/2 adm-mini-input"></div>
+                    <input type="text" id="pay-logo-in" placeholder="Payment Logo URL (optional)" class="adm-mini-input">
+                    <button onclick="addPay()" class="btn-p py-2 text-xs">Add Method</button>
+                    <div id="pay-list" class="space-y-2 mt-2"></div>
+                </div>
+                <div class="card space-y-3">
+                    <input type="text" id="v-name" placeholder="VPN Brand Name" class="adm-mini-input">
+                    <div class="flex items-center gap-2">
+                        <img id="vprev-new" class="w-10 h-10 rounded-xl logo-img flex-none" alt="">
+                        <input type="hidden" id="vlogo-new" value="">
+                        <input type="text" id="vlogourl-new" placeholder="Custom logo URL (optional)" class="adm-mini-input" oninput="syncLogo('new',this.value)">
+                        <label class="logo-up" title="Upload logo"><i class="fa-solid fa-upload"></i><input type="file" accept="image/*" class="hidden" onchange="pickLogo('new',this)"></label>
+                    </div>
+                    <button onclick="addVpn()" class="btn-p py-3 text-xs">Create VPN Brand</button>
+                </div>
+                <div id="adm-vpn-list" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="plan-modal" class="modal"><div class="sheet" id="plan-content"></div></div>
+    <div id="stock-select-modal" class="modal"><div class="sheet" id="stock-select-content"></div></div>
+    <div id="pay-modal" class="modal">
+        <div class="sheet text-center">
+            <h3 class="font-black text-xl mb-6">Payment</h3>
+            <div id="user-pay-options" class="grid grid-cols-2 gap-3 mb-6"></div>
+            <div id="pay-details" class="hidden">
+                <div id="active-method-wrap" class="mb-4"></div>
+                <div class="bg-indigo-50 p-6 rounded-3xl mb-4" onclick="copyText(document.getElementById('active-num').innerText)">
+                    <b id="active-num" class="text-2xl text-indigo-700"></b>
+                </div>
+                <b id="target-price" class="text-xl block mb-6 text-indigo-600"></b>
+                <input type="text" id="trx-id" placeholder="Transaction ID" class="w-full p-4 border-2 rounded-2xl text-center uppercase mb-4 outline-none">
+                <button onclick="orderNow()" class="btn-p">Confirm Order</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // Prevent permanent loading screen if Firebase/CDN is slow or blocked.
+        window.hideAppLoader = function() {
+            const loader = document.getElementById('loading-screen');
+            if (!loader) return;
+            loader.style.opacity = '0';
+            setTimeout(() => { loader.style.display = 'none'; }, 500);
+        };
+        window.addEventListener('load', () => setTimeout(window.hideAppLoader, 1400));
+        setTimeout(window.hideAppLoader, 4500);
+    </script>
+
+
+    <script>
+        window.openAdmin = window.openAdmin || function () {
+            var panel = document.getElementById('admin-panel');
+            if (panel) { panel.classList.remove('hidden'); panel.style.display = 'flex'; panel.style.position = 'fixed'; panel.style.inset = '0'; panel.style.zIndex = '9000'; }
+        };
+    </script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, onValue, push, remove, update, set, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBQ3JX-3igc3UyTw0RGT89wmJidi-MFw0E",
+            authDomain: "numax-otp.firebaseapp.com",
+            databaseURL: "https://numax-otp-default-rtdb.firebaseio.com",
+            projectId: "numax-otp",
+            storageBucket: "numax-otp.firebasestorage.app",
+            messagingSenderId: "733117910855",
+            appId: "1:733117910855:web:21b803740e60d7bae6c662",
+            measurementId: "G-GZRT8KH5FQ"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const tg = window.Telegram?.WebApp || { expand(){}, initDataUnsafe: {}, HapticFeedback: null };
+        tg.expand?.();
+        try { tg.setHeaderColor?.('#020a1f'); tg.setBackgroundColor?.('#020a1f'); } catch (e) {}
+
+        const UID = tg.initDataUnsafe?.user?.id || "0000";
+        const UNAME = tg.initDataUnsafe?.user?.first_name || "Guest";
+        const ADMINS = ["8583821482"];
+
+        const toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2200,
+            timerProgressBar: true,
+            background: '#0a1a3d',
+            color: '#fff'
+        });
+        let ordersReady = false;
+        let lastPendingCount = 0;
+        let userOrderStates = {};
+        const ADMIN_UNLOCK_KEY = 'phantom_admin_access_8583821482';
+
+        function isAdmin() {
+            return ADMINS.includes(UID.toString()) || sessionStorage.getItem(ADMIN_UNLOCK_KEY) === 'yes';
+        }
+        function isBrowserPreview() {
+            return UID.toString() === '0000' || !tg.initDataUnsafe?.user?.id;
+        }
+        function updateAdminStatus() {
+            const status = document.getElementById('admin-status');
+            if (!status) return;
+            const mode = ADMINS.includes(UID.toString()) ? 'Telegram Admin' : (sessionStorage.getItem(ADMIN_UNLOCK_KEY) === 'yes' ? 'Manual Admin Login' : 'No Admin Access');
+            status.innerHTML = `<span class="admin-chip"><i class="fa-solid fa-shield-halved"></i>${esc(mode)}</span> <span class="ml-2">UID: ${esc(UID)}</span>`;
+        }
+        function showAdminNavIfAllowed() {
+            const adminBtn = document.getElementById('admin-btn-nav');
+            if (!adminBtn) return;
+            if (isAdmin() || isBrowserPreview()) adminBtn.classList.remove('hidden');
+            else adminBtn.classList.add('hidden');
+        }
+        function dbError(area, err) {
+            console.error(area, err);
+            notify(`${area} load failed`, 'error', err?.message || 'Check Firebase rules and database URL.');
+        }
+
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"]/g, (m) => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[m]));
+        }
+        function jsStr(v) {
+            return String(v ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
+        }
+        function logoFallbackText(name) {
+            const clean = String(name || 'PAY').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+            return (clean || 'PAY').slice(0, 3);
+        }
+        function logoMarkup(src, name, sizeClass = 'pay-logo') {
+            const label = logoFallbackText(name);
+            return `<span class="pay-logo-wrap"><img src="${esc(src)}" class="${sizeClass}" alt="${esc(name)} logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';"><span class="pay-logo-fallback">${label}</span></span>`;
+        }
+        function getPaymentLogo(name, customLogo = '') {
+            if (customLogo && String(customLogo).trim()) return String(customLogo).trim();
+            const n = String(name || '').toLowerCase();
+            const map = [
+                ['bkash', 'bkash.com'], ['bikash', 'bkash.com'], ['বিকাশ', 'bkash.com'],
+                ['nagad', 'nagad.com.bd'], ['নগদ', 'nagad.com.bd'],
+                ['rocket', 'dutchbanglabank.com'], ['রকেট', 'dutchbanglabank.com'],
+                ['upay', 'upaybd.com'], ['উপায়', 'upaybd.com'], ['ucb', 'ucb.com.bd'],
+                ['binance', 'binance.com'], ['usdt', 'tether.to'], ['paypal', 'paypal.com'],
+                ['visa', 'visa.com'], ['master', 'mastercard.com'], ['card', 'visa.com']
+            ];
+            const found = map.find(([key]) => n.includes(key));
+            const domain = found ? found[1] : `${n.replace(/[^a-z0-9]/g, '') || 'payment'}.com`;
+            return `https://www.google.com/s2/favicons?sz=128&domain=${domain}`;
+        }
+        function notify(title, icon = 'success', body = '') {
+            toast.fire({ title, icon });
+            try {
+                const hapticType = icon === 'error' ? 'error' : icon === 'warning' ? 'warning' : 'success';
+                tg.HapticFeedback?.notificationOccurred?.(hapticType);
+            } catch (e) {}
+            if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+                try { new Notification(title, { body: body || 'PHANTOM VPN ZONE', icon: getPaymentLogo('bkash') }); } catch (e) {}
+            }
+        }
+        function enableFullNotifications() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                setTimeout(() => Notification.requestPermission().catch(() => {}), 1500);
+            }
+        }
+        window.onload = () => {
+            document.getElementById('u-nickname').innerText = UNAME;
+            document.getElementById('display-uid').innerText = "ID: " + UID;
+            document.getElementById('u-pic').src = tg.initDataUnsafe?.user?.photo_url || `https://ui-avatars.com/api/?name=${UNAME}&background=2563eb&color=fff`;
+            showAdminNavIfAllowed();
+            updateAdminStatus();
+            { const pn = document.getElementById('vprev-new'); if (pn) { pn.dataset.n = 'V'; pn.src = letterLogo('V'); } }
+            enableFullNotifications();
+            sync();
+            setTimeout(window.hideAppLoader, 1200);
+        };
+
+        function letterLogo(name) {
+            const l = (String(name || 'V').trim()[0] || 'V').toUpperCase().replace(/[<>&"']/g, 'V');
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient></defs><rect width="128" height="128" rx="28" fill="url(#g)"/><text x="64" y="84" font-size="64" font-weight="800" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif">${l}</text></svg>`;
+            return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+        }
+        function getVpnLogo(vName, custom = '') {
+            if (custom && String(custom).trim()) return String(custom).trim();
+            const domain = String(vName || 'vpn').toLowerCase().replace(/\s/g, '') + ".com";
+            return `https://www.google.com/s2/favicons?sz=128&domain=${domain}`;
+        }
+        window.imgFallback = (img) => { img.onerror = null; img.src = letterLogo(img.dataset.n); };
+        window.syncLogo = (id, val) => {
+            val = String(val || '').trim();
+            const h = document.getElementById('vlogo-' + id); if (h) h.value = val;
+            const p = document.getElementById('vprev-' + id);
+            if (p) p.src = val || letterLogo(p.dataset.n || 'V');
+        };
+        window.pickLogo = (id, input) => {
+            const f = input.files && input.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = () => {
+                const im = new Image();
+                im.onload = () => {
+                    const S = 128, c = document.createElement('canvas'); c.width = c.height = S;
+                    const x = c.getContext('2d');
+                    const iw = im.naturalWidth || S, ih = im.naturalHeight || S;
+                    const k = Math.min(S / iw, S / ih), w = iw * k, h = ih * k;
+                    x.drawImage(im, (S - w) / 2, (S - h) / 2, w, h);
+                    let data = c.toDataURL('image/webp', 0.9);
+                    if (!data.startsWith('data:image/webp')) data = c.toDataURL('image/png');
+                    syncLogo(id, data);
+                    const u = document.getElementById('vlogourl-' + id); if (u) u.value = '';
+                    notify('Logo ready - press save', 'success');
+                };
+                im.onerror = () => notify('Invalid image file', 'error');
+                im.src = r.result;
+            };
+            r.readAsDataURL(f); input.value = '';
+        };
+
+        function sync() {
+            onValue(ref(db, 'supportUrl'), (s) => {
+                const url = s.val() || "#";
+                document.getElementById('support-link').href = url;
+                const supportInput = document.getElementById('set-support-url');
+                if (supportInput && document.activeElement !== supportInput) supportInput.value = url === "#" ? "" : url;
+            }, (err) => dbError('Support link', err));
+            
+            onValue(ref(db, 'vpns'), (s) => {
+                const uBox = document.getElementById('vpn-list'), aBox = document.getElementById('adm-vpn-list'),
+                      sSelect = document.getElementById('stock-vpn-id'), sInv = document.getElementById('stock-inventory-list');
+                uBox.innerHTML = ''; aBox.innerHTML = ''; sSelect.innerHTML = ''; sInv.innerHTML = '';
+                const d = s.val();
+
+                if (!d) {
+                    uBox.innerHTML = `<div class="admin-empty">No VPN package added yet.</div>`;
+                    aBox.innerHTML = `<div class="admin-empty">No VPN brand found. Add a VPN brand from this panel.</div>`;
+                    sSelect.innerHTML = `<option value="">No VPN brand available</option>`;
+                    sInv.innerHTML = `<div class="admin-empty">Stock will appear here after adding VPN accounts.</div>`;
+                    return;
+                }
+
+                Object.keys(d).forEach(id => {
+                    const v = d[id] || {};
+                    const stockCount = v.stock ? Object.keys(v.stock).length : 0;
+                    const isOff = v.status === "OFF";
+                    const safeName = esc(v.name || 'VPN');
+                    const logo = getVpnLogo(v.name || 'vpn', v.logo);
+
+                    uBox.innerHTML += `<div onclick="${!isOff ? `openPlans('${id}')` : ''}" class="card flex justify-between items-center bg-white ${isOff ? 'disabled-card' : ''}">
+                        <div class="flex items-center gap-4"><img src="${esc(logo)}" data-n="${safeName}" onerror="imgFallback(this)" class="vpn-img"><div><b>${safeName}</b><p class="text-[9px] text-slate-400 font-bold mt-1">Stock: ${stockCount}</p></div></div>
+                        <span class="text-[9px] font-black px-3 py-1.5 rounded-lg ${!isOff ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}">
+                        ${isOff ? 'OFFLINE' : 'ONLINE'}
+                        </span></div>`;
+
+                    aBox.innerHTML += `<div class="card space-y-4">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-2"><img src="${esc(logo)}" data-n="${safeName}" onerror="imgFallback(this)" class="w-8 h-8 rounded-lg logo-img"><div><b>${safeName}</b><p class="text-[9px] text-slate-400 font-bold">Stock: ${stockCount}</p></div></div>
+                            <div class="flex items-center gap-3"><label class="switch"><input type="checkbox" ${!isOff?'checked':''} onchange="toggleV('${id}', this.checked)"><span class="slider"></span></label><i onclick="delV('${id}')" class="fa-solid fa-trash text-rose-300"></i></div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <img id="vprev-${id}" src="${esc(logo)}" data-n="${safeName}" onerror="imgFallback(this)" class="w-10 h-10 rounded-xl logo-img flex-none" alt="">
+                            <input type="hidden" id="vlogo-${id}" value="${esc(v.logo || '')}">
+                            <input type="text" id="vlogourl-${id}" value="${esc(String(v.logo || '').startsWith('data:') ? '' : (v.logo || ''))}" placeholder="Custom logo URL (optional)" class="adm-mini-input" oninput="syncLogo('${id}',this.value)">
+                            <label class="logo-up" title="Upload logo"><i class="fa-solid fa-upload"></i><input type="file" accept="image/*" class="hidden" onchange="pickLogo('${id}',this)"></label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="p1n-${id}" value="${esc(v.p1n||'')}" placeholder="Plan 1" class="adm-mini-input"><input type="number" id="p1p-${id}" value="${esc(v.p1p||'')}" placeholder="Price" class="adm-mini-input">
+                            <input type="text" id="p2n-${id}" value="${esc(v.p2n||'')}" placeholder="Plan 2" class="adm-mini-input"><input type="number" id="p2p-${id}" value="${esc(v.p2p||'')}" placeholder="Price" class="adm-mini-input">
+                        </div><button onclick="saveV('${id}')" class="btn-p py-2.5 text-[10px]">Update Configuration</button></div>`;
+
+                    sSelect.innerHTML += `<option value="${id}">${safeName}</option>`;
+                    if(v.stock) {
+                        let inv = `<div class="p-3 bg-slate-50 rounded-2xl"><b class="text-[10px] uppercase">${safeName} Stock (${stockCount})</b><div class="mt-2 space-y-1">`;
+                        Object.keys(v.stock).forEach(sk => {
+                            const item = v.stock[sk] || {};
+                            inv += `<div class="flex justify-between text-[10px] bg-white p-2 rounded"><span>${esc(item.email || 'No email')}</span><i onclick="delStockItem('${id}','${sk}')" class="fa-solid fa-times text-rose-400"></i></div>`;
+                        });
+                        sInv.innerHTML += inv + `</div></div>`;
+                    }
+                });
+                if (!sInv.innerHTML.trim()) sInv.innerHTML = `<div class="admin-empty">No stock saved yet.</div>`;
+            }, (err) => dbError('VPN/Admin data', err));
+
+            onValue(ref(db, 'orders'), (s) => {
+                const aP = document.getElementById('adm-pending'), uBox = document.getElementById('user-orders');
+                aP.innerHTML = ''; uBox.innerHTML = ''; let pCount = 0;
+                const currentUserOrderStates = {};
+                const d = s.val();
+                if(d) Object.keys(d).reverse().forEach(id => {
+                    const o = d[id] || {};
+                    if(o.st === "Pending") {
+                        pCount++;
+                        aP.innerHTML += `<div class="card space-y-3">
+                            <div class="flex justify-between gap-3"><b>${esc(o.user || 'Guest')}</b> <span class="text-[10px] font-bold text-indigo-600 text-right">${esc(o.method || 'Payment')}: ${esc(o.trx || '')}</span></div>
+                            <p class="text-[10px]">${esc(o.vpn || 'VPN')} (${esc(o.plan || '')}) - ${esc(o.date || '')}</p>
+                            <div class="grid grid-cols-3 gap-2 text-[10px]">
+                                <div class="bg-slate-50 p-2 rounded-xl"><b>Price</b><br>৳${esc(o.price || '')}</div>
+                                <div class="bg-slate-50 p-2 rounded-xl"><b>UID</b><br>${esc(o.uid || '')}</div>
+                                <div class="bg-slate-50 p-2 rounded-xl"><b>Status</b><br>${esc(o.st || '')}</div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="showStockList('${id}','${esc(o.vpn_id || '')}')" class="btn-p py-3 text-[10px]">Deliver</button>
+                                <button onclick="rejectOrder('${id}')" class="btn-reject">Reject</button>
+                            </div>
+                        </div>`;
+                    }
+                    if(o.uid == UID) {
+                        currentUserOrderStates[id] = o.st;
+                        let stColor = o.st === "Approved" ? "bg-emerald-50 text-emerald-600" : (o.st === "Rejected" ? "bg-rose-50 text-rose-600" : "bg-indigo-50 text-indigo-600");
+                        uBox.innerHTML += `<div class="card space-y-2">
+                            <div class="flex justify-between items-start">
+                                <div><b class="text-sm">${esc(o.vpn || 'VPN')}</b><p class="text-[9px] text-slate-400 mt-1">${esc(o.date || '')}</p></div>
+                                <span class="text-[10px] font-bold px-2 py-1 rounded ${stColor}">${esc(o.st || '')}</span>
+                            </div>
+                            ${o.email ? `
+                            <div class="mt-3 space-y-2">
+                                <div class="acc-box" onclick="copyText('${jsStr(o.email)}')">
+                                    <div class="flex flex-col"><span class="acc-label">Email / ID</span><span class="acc-value">${esc(o.email)}</span></div>
+                                    <i class="fa-regular fa-copy text-indigo-400 text-xs"></i>
+                                </div>
+                                <div class="acc-box" onclick="copyText('${jsStr(o.pass)}')">
+                                    <div class="flex flex-col"><span class="acc-label">Password</span><span class="acc-value">${esc(o.pass)}</span></div>
+                                    <i class="fa-regular fa-copy text-indigo-400 text-xs"></i>
+                                </div>
+                            </div>
+                            ` : ''}
+                            ${o.st === "Rejected" ? `<p class="text-[9px] text-rose-500 font-bold italic mt-2">Order was rejected by admin.</p>` : ''}
+                        </div>`;
+                    }
+                });
+                if (!aP.innerHTML.trim()) aP.innerHTML = `<div class="admin-empty">No pending orders now.</div>`;
+                if (!uBox.innerHTML.trim()) uBox.innerHTML = `<div class="admin-empty">You have no orders yet.</div>`;
+
+                document.getElementById('p-count').innerText = pCount;
+                const badge = document.getElementById('p-count-badge');
+                badge.innerText = pCount;
+                badge.className = pCount > 0 ? 'bg-rose-500 text-white text-[10px] font-black px-2 py-1 rounded-full animate-bounce' : 'hidden';
+
+                if (ordersReady) {
+                    if (isAdmin() && pCount > lastPendingCount) {
+                        notify('New pending order received', 'info', `${pCount} pending order(s)`);
+                    }
+                    Object.keys(currentUserOrderStates).forEach(orderId => {
+                        const oldStatus = userOrderStates[orderId];
+                        const newStatus = currentUserOrderStates[orderId];
+                        if (oldStatus && oldStatus !== newStatus) {
+                            if (newStatus === 'Approved') notify('Your order has been approved', 'success', 'Account delivered. Check Orders.');
+                            if (newStatus === 'Rejected') notify('Your order has been rejected', 'error', 'Please contact support.');
+                        }
+                    });
+                }
+                lastPendingCount = pCount;
+                userOrderStates = currentUserOrderStates;
+                ordersReady = true;
+            }, (err) => dbError('Orders', err));
+
+            onValue(ref(db, 'payments'), (s) => {
+                const uP = document.getElementById('user-pay-options'), pL = document.getElementById('pay-list');
+                uP.innerHTML = ''; pL.innerHTML = '';
+                const d = s.val();
+                if(!d) {
+                    uP.innerHTML = `<div class="admin-empty col-span-2">No payment method added yet.</div>`;
+                    pL.innerHTML = `<div class="admin-empty">No payment methods yet.</div>`;
+                    return;
+                }
+                Object.keys(d).forEach(id => {
+                    const pay = d[id] || {};
+                    const name = pay.name || 'Payment';
+                    const num = pay.num || '';
+                    const logo = getPaymentLogo(name, pay.logo || '');
+                    uP.innerHTML += `<button onclick="setPay('${jsStr(name)}','${jsStr(num)}','${jsStr(logo)}', this)" class="pay-card">
+                        ${logoMarkup(logo, name)}
+                        <span>${esc(name)}</span>
+                    </button>`;
+                    pL.innerHTML += `<div class="flex justify-between items-center text-[10px] p-2 bg-slate-50 rounded-xl">
+                        <div class="flex items-center gap-2">${logoMarkup(logo, name)}<span>${esc(name)} (${esc(num)})</span></div>
+                        <i onclick="delPay('${id}')" class="fa-solid fa-times text-rose-400"></i>
+                    </div>`;
+                });
+            }, (err) => dbError('Payments', err));
+        }
+
+        window.nav = (pageId, btn) => {
+            // Reset all nav buttons
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.classList.remove('text-indigo-600');
+                b.classList.add('text-slate-400');
+            });
+            // Highlight active button
+            btn.classList.remove('text-slate-400');
+            btn.classList.add('text-indigo-600');
+            // Hide all pages
+            document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+            // Show target page
+            document.getElementById(pageId + '-page').classList.remove('hidden');
+        };
+
+        window.rejectOrder = (id) => {
+            Swal.fire({
+                title: 'Reject Order?',
+                text: "User will see this order as rejected.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'Yes, Reject'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    update(ref(db, `orders/${id}`), { st: "Rejected" }).then(() => notify('Order rejected', 'success')).catch(err => dbError('Reject order', err));
+                }
+            });
+        };
+
+        window.saveV = (id) => update(ref(db,`vpns/${id}`), { 
+            p1n: document.getElementById(`p1n-${id}`).value.trim(), p1p: document.getElementById(`p1p-${id}`).value.trim(),
+            logo: (document.getElementById(`vlogo-${id}`)?.value || '').trim() || null,
+            p2n: document.getElementById(`p2n-${id}`).value.trim(), p2p: document.getElementById(`p2p-${id}`).value.trim()
+        }).then(() => notify('VPN configuration updated', 'success')).catch(err => dbError('Update VPN', err));
+
+        window.addStock = () => {
+            const e = document.getElementById('stock-email').value.trim(), p = document.getElementById('stock-pass').value.trim(), vid = document.getElementById('stock-vpn-id').value;
+            if(!vid) return notify('Create a VPN brand first', 'warning');
+            if(!e || !p) return notify('Enter email and password', 'warning');
+            push(ref(db, `vpns/${vid}/stock`), { email: e, pass: p }).then(() => {
+                document.getElementById('stock-email').value = ''; document.getElementById('stock-pass').value = '';
+                notify('Stock added successfully', 'success');
+            }).catch(err => dbError('Add stock', err));
+        };
+
+        let curV, curPl, curPr, curVid, curMethod;
+        window.openPlans = (id) => {
+            get(ref(db,`vpns/${id}`)).then(s => {
+                const v = s.val(); curV = v.name; curVid = id;
+                let h = `<div class="flex justify-between items-center mb-6"><div class="flex items-center gap-3"><img src="${esc(getVpnLogo(v.name, v.logo))}" data-n="${esc(v.name)}" onerror="imgFallback(this)" class="w-10 h-10 rounded-lg logo-img"><h3 class="font-black text-xl">${v.name}</h3></div><button onclick="this.closest('.modal').style.display='none'">&times;</button></div>`;
+                if(v.p1n) h += `<div onclick="goPay('${v.p1n}','${v.p1p}')" class="card bg-indigo-50 mb-3 p-5 flex justify-between items-center"><span>${v.p1n}</span><b class="text-indigo-600">৳${v.p1p}</b></div>`;
+                if(v.p2n) h += `<div onclick="goPay('${v.p2n}','${v.p2p}')" class="card bg-indigo-50 mb-3 p-5 flex justify-between items-center"><span>${v.p2n}</span><b class="text-indigo-600">৳${v.p2p}</b></div>`;
+                document.getElementById('plan-content').innerHTML = h; document.getElementById('plan-modal').style.display = 'flex';
+            });
+        };
+
+        window.goPay = (n, p) => { curPl = n; curPr = p; curMethod = ''; document.getElementById('plan-modal').style.display='none'; document.getElementById('pay-modal').style.display='flex'; document.getElementById('pay-details').classList.add('hidden'); document.getElementById('active-method-wrap').innerHTML = ''; document.getElementById('target-price').innerText = "Price: ৳"+p; };
+        window.setPay = (n, m, logo = '', el = null) => { curMethod = n; document.querySelectorAll('.pay-card').forEach(card => card.classList.remove('active')); if(el) el.classList.add('active'); document.getElementById('active-num').innerText = m; document.getElementById('active-method-wrap').innerHTML = `<span class="active-method-pill">${logoMarkup(logo || getPaymentLogo(n), n)} ${esc(n)} selected</span>`; document.getElementById('pay-details').classList.remove('hidden'); notify(`${n} selected`, 'success'); };
+        
+        window.orderNow = () => {
+            const trx = document.getElementById('trx-id').value.trim(); if(!curMethod) return notify('Select payment method first', 'warning'); if(!trx) return notify('Enter Transaction ID', 'warning');
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            push(ref(db, 'orders'), { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, trx: trx.toUpperCase(), method: curMethod, uid: UID, user: UNAME, st: "Pending", date: dateStr }).then(() => {
+                notify('Order sent successfully', 'success', 'Admin will review your payment.'); document.getElementById('pay-modal').style.display = 'none';
+                document.getElementById('trx-id').value = '';
+            }).catch(err => dbError('Create order', err));
+        };
+
+        window.showStockList = async (orderId, vpnId) => {
+            const content = document.getElementById('stock-select-content');
+            let h = `<div class="mb-4 font-bold flex justify-between">Select Account <button onclick="this.closest('.modal').style.display='none'">&times;</button></div>`;
+            if(!vpnId) {
+                content.innerHTML = h + `<p class="text-rose-500 text-sm font-bold">This order has no VPN ID. Reject it or ask user to order again.</p>`;
+                document.getElementById('stock-select-modal').style.display = 'flex';
+                return;
+            }
+            try {
+                const snap = await get(ref(db, `vpns/${vpnId}/stock`));
+                if(snap.exists()) {
+                    Object.keys(snap.val()).forEach(sk => {
+                        const stock = snap.val()[sk] || {};
+                        h += `<button class="w-full text-left p-4 bg-slate-50 mb-2 rounded-xl font-bold text-xs" onclick="approveSelected('${orderId}','${vpnId}','${sk}')">${esc(stock.email || 'No email')}</button>`;
+                    });
+                } else h += `<p class="text-rose-500 text-sm font-bold">Stock empty! Add stock first.</p>`;
+                content.innerHTML = h; document.getElementById('stock-select-modal').style.display = 'flex';
+            } catch(err) { dbError('Load stock', err); }
+        };
+
+        window.approveSelected = async (orderId, vpnId, stockKey) => {
+            try {
+                const snap = await get(ref(db, `vpns/${vpnId}/stock/${stockKey}`));
+                if(!snap.exists()) return notify('Selected stock not found', 'error');
+                await update(ref(db, `orders/${orderId}`), { st: "Approved", email: snap.val().email, pass: snap.val().pass });
+                await remove(ref(db, `vpns/${vpnId}/stock/${stockKey}`));
+                document.getElementById('stock-select-modal').style.display = 'none';
+                notify('Account delivered successfully', 'success');
+            } catch(err) { dbError('Approve order', err); }
+        };
+
+        window.toggleV = (id, val) => update(ref(db, `vpns/${id}`), { status: val ? "ON" : "OFF" }).then(() => notify(val ? 'VPN is online' : 'VPN is offline', 'success')).catch(err => dbError('Toggle VPN', err));
+        window.saveSupport = () => set(ref(db, 'supportUrl'), document.getElementById('set-support-url').value.trim()).then(() => notify('Support link saved', 'success')).catch(err => dbError('Save support link', err));
+        window.addPay = () => { const n = document.getElementById('pay-name').value.trim(), m = document.getElementById('pay-num-in').value.trim(), l = document.getElementById('pay-logo-in').value.trim(); if(n&&m) push(ref(db,'payments'),{name:n,num:m,logo:l}).then(() => { document.getElementById('pay-name').value=''; document.getElementById('pay-num-in').value=''; document.getElementById('pay-logo-in').value=''; notify('Payment method added', 'success'); }).catch(err => dbError('Add payment', err)); else notify('Add payment name and number', 'warning'); };
+        window.delPay = (id) => remove(ref(db,`payments/${id}`)).then(() => notify('Payment method removed', 'success')).catch(err => dbError('Delete payment', err));
+        window.addVpn = () => { const n = document.getElementById('v-name').value.trim(); if(!n) return notify('Enter VPN brand name', 'warning'); const logo = (document.getElementById('vlogo-new')?.value || '').trim(); const data = {name:n, status: "ON"}; if (logo) data.logo = logo; push(ref(db,'vpns'), data).then(() => { document.getElementById('v-name').value=''; const u = document.getElementById('vlogourl-new'); if (u) u.value=''; const h = document.getElementById('vlogo-new'); if (h) h.value=''; const p = document.getElementById('vprev-new'); if (p) p.src = letterLogo('V'); notify('VPN brand created', 'success'); }).catch(err => dbError('Add VPN', err)); };
+        window.delV = (id) => {
+            Swal.fire({ title: 'Delete VPN brand?', text: 'This will also remove saved stock under this VPN.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete' }).then(result => {
+                if(result.isConfirmed) remove(ref(db,`vpns/${id}`)).then(() => notify('VPN brand deleted', 'success')).catch(err => dbError('Delete VPN', err));
+            });
+        };
+        window.delStockItem = (vid, skey) => remove(ref(db, `vpns/${vid}/stock/${skey}`)).then(() => notify('Stock item removed', 'success')).catch(err => dbError('Delete stock', err));
+        window.forceRefreshAdmin = () => { updateAdminStatus(); notify('Admin panel refreshed', 'success'); };
+        
+        window.admTab = (t, btn) => {
+            document.querySelectorAll('.adm-tab').forEach(b => b.classList.remove('adm-tab-active'));
+            btn.classList.add('adm-tab-active');
+            document.querySelectorAll('.adm-content').forEach(c => c.classList.add('hidden'));
+            document.getElementById('adm-'+t).classList.remove('hidden');
+        };
+        function showAdminPanel() {
+            const panel = document.getElementById('admin-panel');
+            if (!panel) return notify('Admin panel not found', 'error');
+            panel.classList.remove('hidden');
+            panel.style.display = 'flex';
+            panel.style.position = 'fixed';
+            panel.style.inset = '0';
+            panel.style.zIndex = '9000';
+            document.body.style.overflow = 'hidden';
+        }
+        window.openAdmin = () => {
+            if (isAdmin()) {
+                updateAdminStatus();
+                showAdminPanel();
+                return;
+            }
+            Swal.fire({
+                title: 'Admin Login',
+                text: 'Enter your admin Telegram ID.',
+                input: 'password',
+                inputPlaceholder: 'Admin ID',
+                showCancelButton: true,
+                confirmButtonText: 'Open Admin'
+            }).then(result => {
+                const entered = String(result.value || '').trim();
+                if (!result.isConfirmed) return;
+                if (ADMINS.includes(entered)) {
+                    sessionStorage.setItem(ADMIN_UNLOCK_KEY, 'yes');
+                    showAdminNavIfAllowed();
+                    updateAdminStatus();
+                    showAdminPanel();
+                    notify('Admin panel unlocked', 'success');
+                } else {
+                    notify('Wrong admin ID', 'error');
+                }
+            });
+        };
+        window.closeAdmin = () => {
+            const panel = document.getElementById('admin-panel');
+            if (!panel) return;
+            panel.classList.add('hidden');
+            panel.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const adminBtn = document.getElementById('admin-btn-nav');
+            if (adminBtn) {
+                adminBtn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.openAdmin();
+                });
+            }
+        });
+        window.copyText = (t) => { navigator.clipboard.writeText(t); notify('Copied', 'success'); };
+    </script>
+</body>
+</html>
