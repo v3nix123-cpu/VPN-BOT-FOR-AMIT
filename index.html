@@ -325,6 +325,10 @@
             </div>
 
             <div id="store-page" class="page-content space-y-4">
+                <div class="card flex items-center justify-between">
+                    <div><p class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Wallet balance</p><p class="text-2xl font-black">৳<span id="u-bal">0</span></p></div>
+                    <button onclick="openDeposit()" class="btn-p" style="width:auto;padding:12px 22px;font-size:12px">Add money</button>
+                </div>
                 <div id="vpn-list" class="space-y-3"></div>
             </div>
 
@@ -363,11 +367,13 @@
             <div class="adm-nav">
                 <button onclick="admTab('pending', this)" class="adm-tab adm-tab-active">PENDING (<span id="p-count">0</span>)</button>
                 <button onclick="admTab('stock', this)" class="adm-tab">STOCK MGMT</button>
+                <button onclick="admTab('deposits', this)" class="adm-tab">DEPOSITS (<span id="d-count">0</span>)</button>
                 <button onclick="admTab('settings', this)" class="adm-tab">VPN MGMT</button>
             </div>
         </div>
         <div class="p-5 overflow-y-auto flex-1 pb-24">
             <div id="adm-pending" class="adm-content space-y-4"></div>
+            <div id="adm-deposits" class="adm-content hidden space-y-4"></div>
             <div id="adm-stock" class="adm-content hidden space-y-6">
                 <div class="card space-y-3">
                     <b class="text-xs">Add to Stock</b>
@@ -404,11 +410,32 @@
         </div>
     </div>
 
+    <div id="tg-lock" style="display:none;position:fixed;inset:0;z-index:10000;background:#020a1f;align-items:center;justify-content:center;padding:32px;text-align:center">
+        <div class="card" style="max-width:340px"><i class="fa-brands fa-telegram" style="font-size:64px;color:#60a5fa"></i><h2 class="font-black text-xl mt-4">Open in Telegram</h2><p class="text-xs mt-2" style="color:#93a9cf">This store only works inside the Telegram Mini App.</p></div>
+    </div>
+    <div id="dep-modal" class="modal"><div class="sheet text-center">
+        <div class="flex justify-between items-center mb-5"><h3 class="font-black text-xl">Add Money</h3><button onclick="this.closest('.modal').style.display='none'">&times;</button></div>
+        <div id="dep-pay-options" class="grid grid-cols-2 gap-3 mb-5"></div>
+        <div id="dep-details" class="hidden">
+            <div id="dep-method-wrap" class="mb-4"></div>
+            <div class="bg-indigo-50 p-5 rounded-3xl mb-4" onclick="copyText(document.getElementById('dep-num').innerText)"><b id="dep-num" class="text-2xl text-indigo-700"></b></div>
+            <input type="number" id="dep-amount" min="1" placeholder="Amount (৳)" class="adm-mini-input mb-3" style="padding:14px;font-size:14px;text-align:center">
+            <input type="text" id="dep-trx" placeholder="Transaction ID" class="adm-mini-input mb-4 uppercase" style="padding:14px;font-size:14px;text-align:center">
+            <button onclick="submitDeposit()" class="btn-p">Submit Deposit</button>
+        </div>
+        <div id="dep-history" class="space-y-2 mt-5 text-left"></div>
+    </div></div>
     <div id="plan-modal" class="modal"><div class="sheet" id="plan-content"></div></div>
     <div id="stock-select-modal" class="modal"><div class="sheet" id="stock-select-content"></div></div>
     <div id="pay-modal" class="modal">
         <div class="sheet text-center">
             <h3 class="font-black text-xl mb-6">Payment</h3>
+            <div class="card flex items-center justify-between mb-4">
+                <div class="text-left"><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</p><p id="qty-total" class="text-lg font-black text-indigo-600"></p></div>
+                <div class="flex items-center gap-3"><button onclick="chQty(-1)" class="w-10 h-10 rounded-xl bg-indigo-50 font-black text-xl">-</button><b id="qty-n" class="text-xl text-center" style="width:32px">1</b><button onclick="chQty(1)" class="w-10 h-10 rounded-xl bg-indigo-50 font-black text-xl">+</button></div>
+            </div>
+            <button id="wallet-pay-btn" onclick="payWallet()" class="btn-p mb-3"></button>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">or pay manually</p>
             <div id="user-pay-options" class="grid grid-cols-2 gap-3 mb-6"></div>
             <div id="pay-details" class="hidden">
                 <div id="active-method-wrap" class="mb-4"></div>
@@ -424,6 +451,18 @@
 
 
     <script>
+        (function () {
+            var t = window.Telegram && window.Telegram.WebApp;
+            if (!t || !t.initData || !(t.initDataUnsafe && t.initDataUnsafe.user && t.initDataUnsafe.user.id)) {
+                window.__NO_TG = true;
+                document.addEventListener('DOMContentLoaded', function () {
+                    document.getElementById('tg-lock').style.display = 'flex';
+                    var l = document.getElementById('loading-screen'); if (l) l.style.display = 'none';
+                });
+            }
+        })();
+    </script>
+    <script>
         // Prevent permanent loading screen if Firebase/CDN is slow or blocked.
         window.hideAppLoader = function() {
             const loader = document.getElementById('loading-screen');
@@ -436,16 +475,11 @@
     </script>
 
 
-    <script>
-        window.openAdmin = window.openAdmin || function () {
-            var panel = document.getElementById('admin-panel');
-            if (panel) { panel.classList.remove('hidden'); panel.style.display = 'flex'; panel.style.position = 'fixed'; panel.style.inset = '0'; panel.style.zIndex = '9000'; }
-        };
-    </script>
+    
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, onValue, push, remove, update, set, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, onValue, push, remove, update, set, get, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBQ3JX-3igc3UyTw0RGT89wmJidi-MFw0E",
@@ -458,6 +492,7 @@
             measurementId: "G-GZRT8KH5FQ"
         };
 
+        if (window.__NO_TG) throw new Error('Telegram only');
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const tg = window.Telegram?.WebApp || { expand(){}, initDataUnsafe: {}, HapticFeedback: null };
@@ -466,7 +501,7 @@
 
         const UID = tg.initDataUnsafe?.user?.id || "0000";
         const UNAME = tg.initDataUnsafe?.user?.first_name || "Guest";
-        const ADMINS = ["8583821482"];
+        const ADMINS = ["8505710811"];
 
         const toast = Swal.mixin({
             toast: true,
@@ -483,7 +518,7 @@
         const ADMIN_UNLOCK_KEY = 'phantom_admin_access_8583821482';
 
         function isAdmin() {
-            return ADMINS.includes(UID.toString()) || sessionStorage.getItem(ADMIN_UNLOCK_KEY) === 'yes';
+            return ADMINS.includes(String(UID));
         }
         function isBrowserPreview() {
             return UID.toString() === '0000' || !tg.initDataUnsafe?.user?.id;
@@ -491,13 +526,13 @@
         function updateAdminStatus() {
             const status = document.getElementById('admin-status');
             if (!status) return;
-            const mode = ADMINS.includes(UID.toString()) ? 'Telegram Admin' : (sessionStorage.getItem(ADMIN_UNLOCK_KEY) === 'yes' ? 'Manual Admin Login' : 'No Admin Access');
+            const mode = 'Telegram Admin';
             status.innerHTML = `<span class="admin-chip"><i class="fa-solid fa-shield-halved"></i>${esc(mode)}</span> <span class="ml-2">UID: ${esc(UID)}</span>`;
         }
         function showAdminNavIfAllowed() {
             const adminBtn = document.getElementById('admin-btn-nav');
             if (!adminBtn) return;
-            if (isAdmin() || isBrowserPreview()) adminBtn.classList.remove('hidden');
+            if (isAdmin()) adminBtn.classList.remove('hidden');
             else adminBtn.classList.add('hidden');
         }
         function dbError(area, err) {
@@ -602,6 +637,7 @@
         };
 
         function sync() {
+            startWallet();
             onValue(ref(db, 'supportUrl'), (s) => {
                 const url = s.val() || "#";
                 document.getElementById('support-link').href = url;
@@ -653,7 +689,7 @@
                         </div><button onclick="saveV('${id}')" class="btn-p py-2.5 text-[10px]">Update Configuration</button></div>`;
 
                     sSelect.innerHTML += `<option value="${id}">${safeName}</option>`;
-                    if(v.stock) {
+                    if(v.stock && isAdmin()) {
                         let inv = `<div class="p-3 bg-slate-50 rounded-2xl"><b class="text-[10px] uppercase">${safeName} Stock (${stockCount})</b><div class="mt-2 space-y-1">`;
                         Object.keys(v.stock).forEach(sk => {
                             const item = v.stock[sk] || {};
@@ -672,18 +708,18 @@
                 const d = s.val();
                 if(d) Object.keys(d).reverse().forEach(id => {
                     const o = d[id] || {};
-                    if(o.st === "Pending") {
+                    if(o.st === "Pending" && isAdmin()) {
                         pCount++;
                         aP.innerHTML += `<div class="card space-y-3">
                             <div class="flex justify-between gap-3"><b>${esc(o.user || 'Guest')}</b> <span class="text-[10px] font-bold text-indigo-600 text-right">${esc(o.method || 'Payment')}: ${esc(o.trx || '')}</span></div>
-                            <p class="text-[10px]">${esc(o.vpn || 'VPN')} (${esc(o.plan || '')}) - ${esc(o.date || '')}</p>
+                            <p class="text-[10px]">${esc(o.vpn || 'VPN')} (${esc(o.plan || '')}) x${Number(o.qty) || 1} - ${esc(o.date || '')}</p>
                             <div class="grid grid-cols-3 gap-2 text-[10px]">
-                                <div class="bg-slate-50 p-2 rounded-xl"><b>Price</b><br>৳${esc(o.price || '')}</div>
+                                <div class="bg-slate-50 p-2 rounded-xl"><b>Total</b><br>৳${esc(o.total || o.price || '')}</div>
                                 <div class="bg-slate-50 p-2 rounded-xl"><b>UID</b><br>${esc(o.uid || '')}</div>
                                 <div class="bg-slate-50 p-2 rounded-xl"><b>Status</b><br>${esc(o.st || '')}</div>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="showStockList('${id}','${esc(o.vpn_id || '')}')" class="btn-p py-3 text-[10px]">Deliver</button>
+                                <button onclick="showStockList('${id}','${esc(o.vpn_id || '')}','${Number(o.qty) || 1}')" class="btn-p py-3 text-[10px]">Deliver</button>
                                 <button onclick="rejectOrder('${id}')" class="btn-reject">Reject</button>
                             </div>
                         </div>`;
@@ -693,21 +729,21 @@
                         let stColor = o.st === "Approved" ? "bg-emerald-50 text-emerald-600" : (o.st === "Rejected" ? "bg-rose-50 text-rose-600" : "bg-indigo-50 text-indigo-600");
                         uBox.innerHTML += `<div class="card space-y-2">
                             <div class="flex justify-between items-start">
-                                <div><b class="text-sm">${esc(o.vpn || 'VPN')}</b><p class="text-[9px] text-slate-400 mt-1">${esc(o.date || '')}</p></div>
+                                <div><b class="text-sm">${esc(o.vpn || 'VPN')}${(Number(o.qty) || 1) > 1 ? ' x' + Number(o.qty) : ''}</b><p class="text-[9px] text-slate-400 mt-1">${esc(o.date || '')}</p></div>
                                 <span class="text-[10px] font-bold px-2 py-1 rounded ${stColor}">${esc(o.st || '')}</span>
                             </div>
-                            ${o.email ? `
+                            ${(o.accounts || (o.email ? [{email: o.email, pass: o.pass}] : [])).map((a, i, arr) => `
                             <div class="mt-3 space-y-2">
-                                <div class="acc-box" onclick="copyText('${jsStr(o.email)}')">
-                                    <div class="flex flex-col"><span class="acc-label">Email / ID</span><span class="acc-value">${esc(o.email)}</span></div>
+                                ${arr.length > 1 ? `<span class="acc-label">Account ${i + 1}</span>` : ''}
+                                <div class="acc-box" onclick="copyText('${jsStr(a.email)}')">
+                                    <div class="flex flex-col"><span class="acc-label">Email / ID</span><span class="acc-value">${esc(a.email)}</span></div>
                                     <i class="fa-regular fa-copy text-indigo-400 text-xs"></i>
                                 </div>
-                                <div class="acc-box" onclick="copyText('${jsStr(o.pass)}')">
-                                    <div class="flex flex-col"><span class="acc-label">Password</span><span class="acc-value">${esc(o.pass)}</span></div>
+                                <div class="acc-box" onclick="copyText('${jsStr(a.pass)}')">
+                                    <div class="flex flex-col"><span class="acc-label">Password</span><span class="acc-value">${esc(a.pass)}</span></div>
                                     <i class="fa-regular fa-copy text-indigo-400 text-xs"></i>
                                 </div>
-                            </div>
-                            ` : ''}
+                            </div>`).join('')}
                             ${o.st === "Rejected" ? `<p class="text-[9px] text-rose-500 font-bold italic mt-2">Order was rejected by admin.</p>` : ''}
                         </div>`;
                     }
@@ -739,12 +775,12 @@
             }, (err) => dbError('Orders', err));
 
             onValue(ref(db, 'payments'), (s) => {
-                const uP = document.getElementById('user-pay-options'), pL = document.getElementById('pay-list');
-                uP.innerHTML = ''; pL.innerHTML = '';
+                const uP = document.getElementById('user-pay-options'), pL = document.getElementById('pay-list'), dP = document.getElementById('dep-pay-options');
+                uP.innerHTML = ''; pL.innerHTML = ''; dP.innerHTML = '';
                 const d = s.val();
                 if(!d) {
                     uP.innerHTML = `<div class="admin-empty col-span-2">No payment method added yet.</div>`;
-                    pL.innerHTML = `<div class="admin-empty">No payment methods yet.</div>`;
+                    pL.innerHTML = `<div class="admin-empty">No payment methods yet.</div>`; dP.innerHTML = `<div class="admin-empty col-span-2">No payment method added yet.</div>`;
                     return;
                 }
                 Object.keys(d).forEach(id => {
@@ -756,6 +792,7 @@
                         ${logoMarkup(logo, name)}
                         <span>${esc(name)}</span>
                     </button>`;
+                    dP.innerHTML += `<button onclick="setDep('${jsStr(name)}','${jsStr(num)}','${jsStr(logo)}', this)" class="pay-card">${logoMarkup(logo, name)}<span>${esc(name)}</span></button>`;
                     pL.innerHTML += `<div class="flex justify-between items-center text-[10px] p-2 bg-slate-50 rounded-xl">
                         <div class="flex items-center gap-2">${logoMarkup(logo, name)}<span>${esc(name)} (${esc(num)})</span></div>
                         <i onclick="delPay('${id}')" class="fa-solid fa-times text-rose-400"></i>
@@ -763,6 +800,127 @@
                 });
             }, (err) => dbError('Payments', err));
         }
+
+
+        let curBal = 0, depMethod = '';
+        function startWallet() {
+            onValue(ref(db, `users/${UID}/balance`), (sn) => {
+                curBal = Number(sn.val()) || 0;
+                document.getElementById('u-bal').innerText = curBal.toLocaleString();
+            }, (err) => dbError('Wallet', err));
+            let ready = false, prev = {};
+            onValue(ref(db, 'deposits'), (sn) => {
+                const aD = document.getElementById('adm-deposits'), hist = document.getElementById('dep-history');
+                aD.innerHTML = ''; hist.innerHTML = '';
+                const d = sn.val() || {}, cur = {}; let pc = 0;
+                Object.keys(d).reverse().forEach(id => {
+                    const x = d[id] || {};
+                    if (x.st === 'Pending' && isAdmin()) {
+                        pc++;
+                        aD.innerHTML += `<div class="card space-y-3">
+                            <div class="flex justify-between gap-3"><b>${esc(x.user || 'Guest')}</b><span class="text-[10px] font-bold text-indigo-600 text-right">${esc(x.method || '')}: ${esc(x.trx || '')}</span></div>
+                            <div class="grid grid-cols-2 gap-2 text-[10px]"><div class="bg-slate-50 p-2 rounded-xl"><b>Amount</b><br>৳${esc(x.amount)}</div><div class="bg-slate-50 p-2 rounded-xl"><b>UID</b><br>${esc(x.uid || '')}</div></div>
+                            <p class="text-[10px]">${esc(x.date || '')}</p>
+                            <div class="flex gap-2"><button onclick="approveDeposit('${id}')" class="btn-p py-3 text-[10px]">Approve</button><button onclick="rejectDeposit('${id}')" class="btn-reject">Reject</button></div>
+                        </div>`;
+                    }
+                    if (x.uid == UID) {
+                        cur[id] = x.st;
+                        const c = x.st === 'Approved' ? 'text-emerald-500' : (x.st === 'Rejected' ? 'text-rose-400' : 'text-indigo-600');
+                        hist.innerHTML += `<div class="flex justify-between text-[11px] p-3 bg-slate-50 rounded-xl font-bold"><span>৳${esc(x.amount)} - ${esc(x.method || '')}</span><span class="${c}">${esc(x.st)}</span></div>`;
+                    }
+                });
+                if (!aD.innerHTML) aD.innerHTML = '<div class="admin-empty">No pending deposits.</div>';
+                if (hist.innerHTML) hist.innerHTML = '<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your deposits</p>' + hist.innerHTML;
+                document.getElementById('d-count').innerText = pc;
+                if (ready) Object.keys(cur).forEach(id => {
+                    if (prev[id] && prev[id] !== cur[id]) {
+                        if (cur[id] === 'Approved') notify('Deposit approved', 'success', 'Wallet balance updated.');
+                        if (cur[id] === 'Rejected') notify('Deposit rejected', 'error', 'Please contact support.');
+                    }
+                });
+                prev = cur; ready = true;
+            }, (err) => dbError('Deposits', err));
+        }
+        window.openDeposit = () => { depMethod = ''; document.getElementById('dep-details').classList.add('hidden'); document.querySelectorAll('#dep-pay-options .pay-card').forEach(c => c.classList.remove('active')); document.getElementById('dep-modal').style.display = 'flex'; };
+        window.setDep = (n, m, logo = '', el = null) => {
+            depMethod = n; document.querySelectorAll('#dep-pay-options .pay-card').forEach(c => c.classList.remove('active')); if (el) el.classList.add('active');
+            document.getElementById('dep-num').innerText = m;
+            document.getElementById('dep-method-wrap').innerHTML = `<span class="active-method-pill">${logoMarkup(logo || getPaymentLogo(n), n)} ${esc(n)} selected</span>`;
+            document.getElementById('dep-details').classList.remove('hidden');
+        };
+        window.submitDeposit = () => {
+            const amount = Number(document.getElementById('dep-amount').value), trx = document.getElementById('dep-trx').value.trim();
+            if (!depMethod) return notify('Select payment method first', 'warning');
+            if (!(amount > 0)) return notify('Enter a valid amount', 'warning');
+            if (!trx) return notify('Enter Transaction ID', 'warning');
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            push(ref(db, 'deposits'), { uid: UID, user: UNAME, method: depMethod, amount, trx: trx.toUpperCase(), st: 'Pending', date: dateStr }).then(() => {
+                document.getElementById('dep-amount').value = ''; document.getElementById('dep-trx').value = ''; document.getElementById('dep-details').classList.add('hidden');
+                notify('Deposit request sent', 'success', 'Admin will review it.');
+            }).catch(err => dbError('Deposit', err));
+        };
+        window.approveDeposit = async (id) => {
+            if (!isAdmin()) return;
+            try {
+                let won = false, info = null;
+                await runTransaction(ref(db, `deposits/${id}`), (d) => { won = false; if (d && d.st === 'Pending') { d.st = 'Approved'; won = true; info = { uid: d.uid, amount: Number(d.amount) }; } return d; });
+                if (!won) return notify('Already handled', 'warning');
+                await runTransaction(ref(db, `users/${info.uid}/balance`), (b) => (Number(b) || 0) + info.amount);
+                notify('Deposit approved', 'success');
+            } catch (err) { dbError('Approve deposit', err); }
+        };
+        window.rejectDeposit = async (id) => {
+            if (!isAdmin()) return;
+            try {
+                await runTransaction(ref(db, `deposits/${id}`), (d) => { if (d && d.st === 'Pending') d.st = 'Rejected'; return d; });
+                notify('Deposit rejected', 'success');
+            } catch (err) { dbError('Reject deposit', err); }
+        };
+
+        // ----- quantity + wallet payment -----
+        let curQty = 1, curMax = 1;
+        function refreshQty() {
+            const t = Number(curPr) * curQty;
+            document.getElementById('qty-n').innerText = curQty;
+            document.getElementById('qty-total').innerText = 'Total ৳' + t;
+            document.getElementById('target-price').innerText = 'Total: ৳' + t + (curQty > 1 ? ` (${curQty} x ৳${curPr})` : '');
+            document.getElementById('wallet-pay-btn').innerText = 'Pay ৳' + t + ' from wallet';
+        }
+        window.chQty = (d) => {
+            const n = curQty + d; if (n < 1) return;
+            if (n > curMax) return notify('Only ' + curMax + ' in stock', 'warning');
+            curQty = n; refreshQty();
+        };
+        window.goPay = async (n, p) => {
+            let c = 0;
+            try { const sn = await get(ref(db, `vpns/${curVid}/stock`)); c = sn.exists() ? Object.keys(sn.val()).length : 0; } catch (e) {}
+            if (c < 1) return notify('Out of stock', 'warning');
+            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = Math.min(c, 10);
+            document.getElementById('plan-modal').style.display = 'none'; document.getElementById('pay-modal').style.display = 'flex';
+            document.getElementById('pay-details').classList.add('hidden'); document.getElementById('active-method-wrap').innerHTML = '';
+            document.querySelectorAll('#user-pay-options .pay-card').forEach(c2 => c2.classList.remove('active'));
+            refreshQty();
+        };
+        window.payWallet = async () => {
+            const total = Number(curPr) * curQty; if (!(total > 0)) return notify('Invalid price', 'error');
+            try {
+                let ok = false;
+                await runTransaction(ref(db, `users/${UID}/balance`), (b) => { ok = false; b = Number(b) || 0; if (b < total) return; ok = true; return b - total; });
+                if (!ok) return notify('Not enough balance', 'warning', 'Add money first.');
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                try {
+                    await push(ref(db, 'orders'), { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total, trx: 'WALLET', method: 'Wallet', uid: UID, user: UNAME, st: 'Pending', date: dateStr });
+                } catch (e) {
+                    await runTransaction(ref(db, `users/${UID}/balance`), (b) => (Number(b) || 0) + total);
+                    throw e;
+                }
+                document.getElementById('pay-modal').style.display = 'none';
+                notify('Order placed from wallet', 'success', 'Admin will deliver your account(s).');
+            } catch (err) { dbError('Wallet payment', err); }
+        };
 
         window.nav = (pageId, btn) => {
             // Reset all nav buttons
@@ -787,9 +945,15 @@
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
                 confirmButtonText: 'Yes, Reject'
-            }).then((result) => {
+            }).then(async (result) => {
                 if (result.isConfirmed) {
-                    update(ref(db, `orders/${id}`), { st: "Rejected" }).then(() => notify('Order rejected', 'success')).catch(err => dbError('Reject order', err));
+                    try {
+                    if (!isAdmin()) return;
+                    let won = false, info = null;
+                    await runTransaction(ref(db, `orders/${id}`), (o) => { won = false; if (o && o.st === 'Pending') { o.st = 'Rejected'; won = true; info = { method: o.method, uid: o.uid, total: Number(o.total || o.price) || 0 }; } return o; });
+                    if (won && info.method === 'Wallet' && info.total > 0) await runTransaction(ref(db, `users/${info.uid}/balance`), (b) => (Number(b) || 0) + info.total);
+                    notify(won ? 'Order rejected' : 'Already handled', won ? 'success' : 'warning');
+                } catch (err) { dbError('Reject order', err); }
                 }
             });
         };
@@ -821,48 +985,56 @@
             });
         };
 
-        window.goPay = (n, p) => { curPl = n; curPr = p; curMethod = ''; document.getElementById('plan-modal').style.display='none'; document.getElementById('pay-modal').style.display='flex'; document.getElementById('pay-details').classList.add('hidden'); document.getElementById('active-method-wrap').innerHTML = ''; document.getElementById('target-price').innerText = "Price: ৳"+p; };
         window.setPay = (n, m, logo = '', el = null) => { curMethod = n; document.querySelectorAll('.pay-card').forEach(card => card.classList.remove('active')); if(el) el.classList.add('active'); document.getElementById('active-num').innerText = m; document.getElementById('active-method-wrap').innerHTML = `<span class="active-method-pill">${logoMarkup(logo || getPaymentLogo(n), n)} ${esc(n)} selected</span>`; document.getElementById('pay-details').classList.remove('hidden'); notify(`${n} selected`, 'success'); };
         
         window.orderNow = () => {
             const trx = document.getElementById('trx-id').value.trim(); if(!curMethod) return notify('Select payment method first', 'warning'); if(!trx) return notify('Enter Transaction ID', 'warning');
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            push(ref(db, 'orders'), { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, trx: trx.toUpperCase(), method: curMethod, uid: UID, user: UNAME, st: "Pending", date: dateStr }).then(() => {
+            push(ref(db, 'orders'), { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total: curPr * curQty, trx: trx.toUpperCase(), method: curMethod, uid: UID, user: UNAME, st: "Pending", date: dateStr }).then(() => {
                 notify('Order sent successfully', 'success', 'Admin will review your payment.'); document.getElementById('pay-modal').style.display = 'none';
                 document.getElementById('trx-id').value = '';
             }).catch(err => dbError('Create order', err));
         };
 
-        window.showStockList = async (orderId, vpnId) => {
+        window.showStockList = async (orderId, vpnId, qty = 1) => {
+            if (!isAdmin()) return;
             const content = document.getElementById('stock-select-content');
-            let h = `<div class="mb-4 font-bold flex justify-between">Select Account <button onclick="this.closest('.modal').style.display='none'">&times;</button></div>`;
-            if(!vpnId) {
+            let h = `<div class="mb-4 font-bold flex justify-between">Select ${qty} account(s) <button onclick="this.closest('.modal').style.display='none'">&times;</button></div>`;
+            if (!vpnId) {
                 content.innerHTML = h + `<p class="text-rose-500 text-sm font-bold">This order has no VPN ID. Reject it or ask user to order again.</p>`;
                 document.getElementById('stock-select-modal').style.display = 'flex';
                 return;
             }
             try {
                 const snap = await get(ref(db, `vpns/${vpnId}/stock`));
-                if(snap.exists()) {
+                if (snap.exists()) {
                     Object.keys(snap.val()).forEach(sk => {
                         const stock = snap.val()[sk] || {};
-                        h += `<button class="w-full text-left p-4 bg-slate-50 mb-2 rounded-xl font-bold text-xs" onclick="approveSelected('${orderId}','${vpnId}','${sk}')">${esc(stock.email || 'No email')}</button>`;
+                        h += `<label class="flex items-center gap-3 w-full p-4 bg-slate-50 mb-2 rounded-xl font-bold text-xs"><input type="checkbox" class="stk-pick" value="${sk}"> ${esc(stock.email || 'No email')}</label>`;
                     });
+                    h += `<button onclick="approveSelected('${orderId}','${vpnId}',${Number(qty) || 1})" class="btn-p mt-3">Deliver</button>`;
                 } else h += `<p class="text-rose-500 text-sm font-bold">Stock empty! Add stock first.</p>`;
                 content.innerHTML = h; document.getElementById('stock-select-modal').style.display = 'flex';
-            } catch(err) { dbError('Load stock', err); }
+            } catch (err) { dbError('Load stock', err); }
         };
 
-        window.approveSelected = async (orderId, vpnId, stockKey) => {
+        window.approveSelected = async (orderId, vpnId, qty) => {
+            if (!isAdmin()) return;
+            const keys = [...document.querySelectorAll('.stk-pick:checked')].map(i => i.value);
+            if (keys.length !== qty) return notify(`Select exactly ${qty} account(s)`, 'warning');
             try {
-                const snap = await get(ref(db, `vpns/${vpnId}/stock/${stockKey}`));
-                if(!snap.exists()) return notify('Selected stock not found', 'error');
-                await update(ref(db, `orders/${orderId}`), { st: "Approved", email: snap.val().email, pass: snap.val().pass });
-                await remove(ref(db, `vpns/${vpnId}/stock/${stockKey}`));
+                const accounts = [];
+                for (const k of keys) {
+                    const sn = await get(ref(db, `vpns/${vpnId}/stock/${k}`));
+                    if (!sn.exists()) return notify('Selected stock not found', 'error');
+                    accounts.push({ email: sn.val().email, pass: sn.val().pass });
+                }
+                await update(ref(db, `orders/${orderId}`), { st: "Approved", email: accounts[0].email, pass: accounts[0].pass, accounts });
+                for (const k of keys) await remove(ref(db, `vpns/${vpnId}/stock/${k}`));
                 document.getElementById('stock-select-modal').style.display = 'none';
-                notify('Account delivered successfully', 'success');
-            } catch(err) { dbError('Approve order', err); }
+                notify('Account(s) delivered successfully', 'success');
+            } catch (err) { dbError('Approve order', err); }
         };
 
         window.toggleV = (id, val) => update(ref(db, `vpns/${id}`), { status: val ? "ON" : "OFF" }).then(() => notify(val ? 'VPN is online' : 'VPN is offline', 'success')).catch(err => dbError('Toggle VPN', err));
@@ -895,31 +1067,9 @@
             document.body.style.overflow = 'hidden';
         }
         window.openAdmin = () => {
-            if (isAdmin()) {
-                updateAdminStatus();
-                showAdminPanel();
-                return;
-            }
-            Swal.fire({
-                title: 'Admin Login',
-                text: 'Enter your admin Telegram ID.',
-                input: 'password',
-                inputPlaceholder: 'Admin ID',
-                showCancelButton: true,
-                confirmButtonText: 'Open Admin'
-            }).then(result => {
-                const entered = String(result.value || '').trim();
-                if (!result.isConfirmed) return;
-                if (ADMINS.includes(entered)) {
-                    sessionStorage.setItem(ADMIN_UNLOCK_KEY, 'yes');
-                    showAdminNavIfAllowed();
-                    updateAdminStatus();
-                    showAdminPanel();
-                    notify('Admin panel unlocked', 'success');
-                } else {
-                    notify('Wrong admin ID', 'error');
-                }
-            });
+            if (!isAdmin()) return;
+            updateAdminStatus();
+            showAdminPanel();
         };
         window.closeAdmin = () => {
             const panel = document.getElementById('admin-panel');
