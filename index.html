@@ -293,6 +293,7 @@
         #admin-panel:not(.hidden) { display: flex !important; }
         #admin-btn-nav { pointer-events: auto !important; position: relative; z-index: 1100; }
 
+        .swal2-container { z-index: 20000 !important; }
         .swal2-popup { background: rgba(6, 22, 58, 0.94) !important; color: #fff !important; border: 1px solid var(--line); border-radius: 24px !important; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
         .swal2-confirm { background: linear-gradient(135deg, #3b82f6, #1e40af) !important; border-radius: 14px !important; }
         .swal2-cancel { background: rgba(255,255,255,0.12) !important; border-radius: 14px !important; }
@@ -366,6 +367,7 @@
         <div class="p-4 bg-white">
             <div class="adm-nav">
                 <button onclick="admTab('pending', this)" class="adm-tab adm-tab-active">PENDING (<span id="p-count">0</span>)</button>
+                <button onclick="admTab('users', this)" class="adm-tab">USERS</button>
                 <button onclick="admTab('stock', this)" class="adm-tab">STOCK MGMT</button>
                 <button onclick="admTab('deposits', this)" class="adm-tab">DEPOSITS (<span id="d-count">0</span>)</button>
                 <button onclick="admTab('settings', this)" class="adm-tab">VPN MGMT</button>
@@ -374,12 +376,35 @@
         <div class="p-5 overflow-y-auto flex-1 pb-24">
             <div id="adm-pending" class="adm-content space-y-4"></div>
             <div id="adm-deposits" class="adm-content hidden space-y-4"></div>
+            <div id="adm-users" class="adm-content hidden space-y-3">
+                <input type="text" id="user-search" oninput="renderUsers()" placeholder="Search name / ID / username" class="adm-mini-input" style="padding:14px;font-size:12px">
+                <div id="user-list" class="space-y-3"></div>
+            </div>
             <div id="adm-stock" class="adm-content hidden space-y-6">
                 <div class="card space-y-3">
                     <b class="text-xs">Add to Stock</b>
-                    <input type="text" id="stock-email" placeholder="Email / ID" class="adm-mini-input">
-                    <input type="text" id="stock-pass" placeholder="Password" class="adm-mini-input">
                     <select id="stock-vpn-id" class="adm-mini-input"></select>
+                    <select id="stk-mode" class="adm-mini-input" onchange="stkMode()">
+                        <option value="emails">UPLOAD EMAILS</option>
+                        <option value="pass">UPLOAD PASSWORD FOR ALL</option>
+                        <option value="file">UPLOAD ACCOUNT FILE (MAIL|PASS)</option>
+                    </select>
+                    <div id="stk-emails" class="space-y-2">
+                        <p class="text-[10px] text-slate-400 font-bold">One email / ID per line. Add the password later with "Password for all".</p>
+                        <textarea id="stk-emails-t" rows="5" class="adm-mini-input" placeholder="mail1@example.com&#10;mail2@example.com"></textarea>
+                        <input type="file" accept=".txt,.csv" onchange="stkRead(this,'stk-emails-t')" class="adm-mini-input">
+                    </div>
+                    <div id="stk-pass" class="space-y-2 hidden">
+                        <p class="text-[10px] text-slate-400 font-bold">This password is set on every stock item of the selected VPN that has no password yet.</p>
+                        <input type="text" id="stk-pass-v" placeholder="Password for all" class="adm-mini-input">
+                        <input type="file" accept=".txt" onchange="stkRead(this,'stk-pass-v',true)" class="adm-mini-input">
+                        <label class="flex items-center gap-2 text-[10px] font-bold"><input type="checkbox" id="stk-pass-over"> Overwrite existing passwords too</label>
+                    </div>
+                    <div id="stk-file" class="space-y-2 hidden">
+                        <p class="text-[10px] text-slate-400 font-bold">One account per line: mail|password</p>
+                        <textarea id="stk-file-t" rows="5" class="adm-mini-input" placeholder="mail1@example.com|pass1&#10;mail2@example.com|pass2"></textarea>
+                        <input type="file" accept=".txt,.csv" onchange="stkRead(this,'stk-file-t')" class="adm-mini-input">
+                    </div>
                     <button onclick="addStock()" class="btn-p py-3 text-xs">Save Stock</button>
                 </div>
                 <div id="stock-inventory-list" class="space-y-3"></div>
@@ -431,7 +456,7 @@
         <div class="sheet text-center">
             <h3 class="font-black text-xl mb-6">Payment</h3>
             <div class="card flex items-center justify-between mb-4">
-                <div class="text-left"><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</p><p id="qty-total" class="text-lg font-black text-indigo-600"></p></div>
+                <div class="text-left"><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</p><p id="qty-total" class="text-lg font-black text-indigo-600"></p><p id="qty-note" class="text-[9px] font-bold text-slate-400 mt-1"></p></div>
                 <div class="flex items-center gap-3"><button onclick="chQty(-1)" class="w-10 h-10 rounded-xl bg-indigo-50 font-black text-xl">-</button><b id="qty-n" class="text-xl text-center" style="width:32px">1</b><button onclick="chQty(1)" class="w-10 h-10 rounded-xl bg-indigo-50 font-black text-xl">+</button></div>
             </div>
             <button id="wallet-pay-btn" onclick="payWallet()" class="btn-p mb-3"></button>
@@ -501,11 +526,11 @@
 
         const UID = tg.initDataUnsafe?.user?.id || "0000";
         const UNAME = tg.initDataUnsafe?.user?.first_name || "Guest";
-        const ADMINS = ["8505710811"];
+        const ADMINS = ["8583821482", "8505710811"];
 
         const toast = Swal.mixin({
             toast: true,
-            position: 'top-end',
+            position: 'top',
             showConfirmButton: false,
             timer: 2200,
             timerProgressBar: true,
@@ -802,8 +827,40 @@
         }
 
 
+        let usersCache = {};
+        function startUsers() {
+            if (!isAdmin()) return;
+            onValue(ref(db, 'users'), (sn) => { usersCache = sn.val() || {}; renderUsers(); }, (err) => dbError('Users', err));
+        }
+        window.renderUsers = () => {
+            const box = document.getElementById('user-list'); if (!box) return;
+            const q = (document.getElementById('user-search').value || '').toLowerCase().trim();
+            let h = '';
+            Object.keys(usersCache).forEach(uid => {
+                const u = usersCache[uid] || {}, p = u.profile || {}, name = p.name || 'User', bal = Number(u.balance) || 0;
+                if (q && !(`${name} ${uid} ${p.username || ''}`.toLowerCase().includes(q))) return;
+                h += `<div class="card flex items-center gap-3">
+                    <img src="${esc(p.photo || '')}" data-n="${esc(name)}" onerror="imgFallback(this)" class="w-11 h-11 rounded-full object-cover flex-none" alt="">
+                    <div class="flex-1 min-w-0"><b class="text-sm block truncate">${esc(name)}</b><p class="text-[9px] text-slate-400 font-bold truncate">${p.username ? '@' + esc(p.username) + ' - ' : ''}ID ${esc(uid)}</p><p class="text-xs font-black text-emerald-500 mt-1">৳${bal.toLocaleString()}</p></div>
+                    <button onclick="editBalance('${jsStr(uid)}',${bal},'${jsStr(name)}')" class="btn-p" style="width:auto;padding:10px 14px;font-size:10px">Edit</button>
+                </div>`;
+            });
+            box.innerHTML = h || '<div class="admin-empty">No users found.</div>';
+        };
+        window.editBalance = async (uid, cur, name) => {
+            if (!isAdmin()) return;
+            const r = await Swal.fire({ title: 'Edit balance', text: `${name} (${uid})`, input: 'number', inputValue: cur, inputAttributes: { step: '1', min: '0' }, showCancelButton: true, confirmButtonText: 'Save' });
+            if (!r.isConfirmed) return;
+            const n = Number(r.value);
+            if (!isFinite(n) || n < 0) return notify('Invalid amount', 'error');
+            try { await set(ref(db, `users/${uid}/balance`), n); notify('Balance updated', 'success'); }
+            catch (err) { dbError('Edit balance', err); }
+        };
         let curBal = 0, depMethod = '';
         function startWallet() {
+            const tu = tg.initDataUnsafe?.user || {};
+            update(ref(db, `users/${UID}/profile`), { name: UNAME, username: tu.username || '', photo: tu.photo_url || '', seen: Date.now() }).catch(() => {});
+            startUsers();
             onValue(ref(db, `users/${UID}/balance`), (sn) => {
                 curBal = Number(sn.val()) || 0;
                 document.getElementById('u-bal').innerText = curBal.toLocaleString();
@@ -880,24 +937,24 @@
         };
 
         // ----- quantity + wallet payment -----
-        let curQty = 1, curMax = 1;
+        let curQty = 1, curMax = 10, curStock = 0;
         function refreshQty() {
             const t = Number(curPr) * curQty;
             document.getElementById('qty-n').innerText = curQty;
             document.getElementById('qty-total').innerText = 'Total ৳' + t;
+            document.getElementById('qty-note').innerText = curStock >= curQty ? 'In stock - wallet orders are delivered instantly' : 'Low / no stock - admin will deliver manually';
             document.getElementById('target-price').innerText = 'Total: ৳' + t + (curQty > 1 ? ` (${curQty} x ৳${curPr})` : '');
             document.getElementById('wallet-pay-btn').innerText = 'Pay ৳' + t + ' from wallet';
         }
         window.chQty = (d) => {
             const n = curQty + d; if (n < 1) return;
-            if (n > curMax) return notify('Only ' + curMax + ' in stock', 'warning');
+            if (n > curMax) return notify('Max ' + curMax + ' per order', 'warning');
             curQty = n; refreshQty();
         };
         window.goPay = async (n, p) => {
-            let c = 0;
-            try { const sn = await get(ref(db, `vpns/${curVid}/stock`)); c = sn.exists() ? Object.keys(sn.val()).length : 0; } catch (e) {}
-            if (c < 1) return notify('Out of stock', 'warning');
-            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = Math.min(c, 10);
+            curStock = 0;
+            try { const sn = await get(ref(db, `vpns/${curVid}/stock`)); if (sn.exists()) curStock = Object.values(sn.val()).filter(x => x && x.email && x.pass).length; } catch (e) {}
+            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = 10;
             document.getElementById('plan-modal').style.display = 'none'; document.getElementById('pay-modal').style.display = 'flex';
             document.getElementById('pay-details').classList.add('hidden'); document.getElementById('active-method-wrap').innerHTML = '';
             document.querySelectorAll('#user-pay-options .pay-card').forEach(c2 => c2.classList.remove('active'));
@@ -905,20 +962,36 @@
         };
         window.payWallet = async () => {
             const total = Number(curPr) * curQty; if (!(total > 0)) return notify('Invalid price', 'error');
+            const refund = () => runTransaction(ref(db, `users/${UID}/balance`), (b) => (Number(b) || 0) + total);
+            let claimed = [];
+            const restore = async () => { for (const c of claimed) await set(ref(db, `vpns/${curVid}/stock/${c.key}`), { email: c.email, pass: c.pass }).catch(() => {}); claimed = []; };
             try {
                 let ok = false;
                 await runTransaction(ref(db, `users/${UID}/balance`), (b) => { ok = false; b = Number(b) || 0; if (b < total) return; ok = true; return b - total; });
                 if (!ok) return notify('Not enough balance', 'warning', 'Add money first.');
+                try {
+                    const sn = await get(ref(db, `vpns/${curVid}/stock`));
+                    if (sn.exists()) {
+                        const keys = Object.keys(sn.val()).filter(k => { const x = sn.val()[k]; return x && x.email && x.pass; });
+                        for (const k of keys) {
+                            if (claimed.length >= curQty) break;
+                            let taken = null;
+                            await runTransaction(ref(db, `vpns/${curVid}/stock/${k}`), (cur) => { taken = null; if (cur === null) return null; if (cur.email && cur.pass) { taken = cur; return null; } return; });
+                            if (taken) claimed.push({ key: k, email: taken.email, pass: taken.pass });
+                        }
+                    }
+                } catch (e) {}
+                if (claimed.length < curQty) await restore();
                 const now = new Date();
                 const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                try {
-                    await push(ref(db, 'orders'), { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total, trx: 'WALLET', method: 'Wallet', uid: UID, user: UNAME, st: 'Pending', date: dateStr });
-                } catch (e) {
-                    await runTransaction(ref(db, `users/${UID}/balance`), (b) => (Number(b) || 0) + total);
-                    throw e;
-                }
+                const order = { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total, trx: 'WALLET', method: 'Wallet', uid: UID, user: UNAME, date: dateStr, st: 'Pending' };
+                const auto = claimed.length === curQty && curQty > 0;
+                if (auto) { const accounts = claimed.map(c => ({ email: c.email, pass: c.pass })); Object.assign(order, { st: 'Approved', email: accounts[0].email, pass: accounts[0].pass, accounts, auto: true }); }
+                try { await push(ref(db, 'orders'), order); }
+                catch (e) { await restore(); await refund(); throw e; }
                 document.getElementById('pay-modal').style.display = 'none';
-                notify('Order placed from wallet', 'success', 'Admin will deliver your account(s).');
+                if (auto) notify('Order delivered instantly', 'success', 'Check Orders for your account(s).');
+                else notify('Order placed from wallet', 'success', 'Out of stock - admin will deliver manually.');
             } catch (err) { dbError('Wallet payment', err); }
         };
 
@@ -964,14 +1037,51 @@
             p2n: document.getElementById(`p2n-${id}`).value.trim(), p2p: document.getElementById(`p2p-${id}`).value.trim()
         }).then(() => notify('VPN configuration updated', 'success')).catch(err => dbError('Update VPN', err));
 
-        window.addStock = () => {
-            const e = document.getElementById('stock-email').value.trim(), p = document.getElementById('stock-pass').value.trim(), vid = document.getElementById('stock-vpn-id').value;
-            if(!vid) return notify('Create a VPN brand first', 'warning');
-            if(!e || !p) return notify('Enter email and password', 'warning');
-            push(ref(db, `vpns/${vid}/stock`), { email: e, pass: p }).then(() => {
-                document.getElementById('stock-email').value = ''; document.getElementById('stock-pass').value = '';
-                notify('Stock added successfully', 'success');
-            }).catch(err => dbError('Add stock', err));
+        window.stkMode = () => {
+            const m = document.getElementById('stk-mode').value;
+            ['emails', 'pass', 'file'].forEach(k => document.getElementById('stk-' + k).classList.toggle('hidden', k !== m));
+        };
+        window.stkRead = (input, targetId, firstLine = false) => {
+            const f = input.files && input.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = () => {
+                let t = String(r.result || '');
+                if (firstLine) t = (t.split(/\r?\n/).map(x => x.trim()).find(Boolean) || '');
+                document.getElementById(targetId).value = t;
+                notify('File loaded', 'success');
+            };
+            r.readAsText(f); input.value = '';
+        };
+        window.addStock = async () => {
+            if (!isAdmin()) return;
+            const vid = document.getElementById('stock-vpn-id').value, mode = document.getElementById('stk-mode').value;
+            if (!vid) return notify('Create a VPN brand first', 'warning');
+            const base = ref(db, `vpns/${vid}/stock`);
+            try {
+                if (mode === 'pass') {
+                    const pw = document.getElementById('stk-pass-v').value.trim(), over = document.getElementById('stk-pass-over').checked;
+                    if (!pw) return notify('Enter a password', 'warning');
+                    const sn = await get(base); if (!sn.exists()) return notify('No stock items found', 'warning');
+                    const upd = {}; let n = 0;
+                    Object.keys(sn.val()).forEach(k => { const x = sn.val()[k] || {}; if (over || !x.pass) { upd[k + '/pass'] = pw; n++; } });
+                    if (!n) return notify('Nothing to update', 'warning');
+                    await update(base, upd); notify(`Password set on ${n} account(s)`, 'success');
+                    return;
+                }
+                const lines = String(document.getElementById(mode === 'emails' ? 'stk-emails-t' : 'stk-file-t').value || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                const upd = {}; let n = 0, bad = 0;
+                lines.forEach(l => {
+                    let email = '', pass = '';
+                    if (mode === 'emails') email = l.split(/[\s,;|]/)[0];
+                    else { const m = l.match(/^([^|\t,:;\s]+)\s*[|\t,:;]\s*(.+)$/); if (m) { email = m[1]; pass = m[2].trim(); } }
+                    if (!email || (mode === 'file' && !pass)) { bad++; return; }
+                    upd[push(base).key] = { email, pass }; n++;
+                });
+                if (!n) return notify('No valid lines found', 'warning');
+                await update(base, upd);
+                document.getElementById(mode === 'emails' ? 'stk-emails-t' : 'stk-file-t').value = '';
+                notify(`${n} account(s) added` + (bad ? `, ${bad} skipped` : ''), 'success');
+            } catch (err) { dbError('Add stock', err); }
         };
 
         let curV, curPl, curPr, curVid, curMethod;
@@ -999,24 +1109,38 @@
 
         window.showStockList = async (orderId, vpnId, qty = 1) => {
             if (!isAdmin()) return;
+            qty = Number(qty) || 1;
             const content = document.getElementById('stock-select-content');
-            let h = `<div class="mb-4 font-bold flex justify-between">Select ${qty} account(s) <button onclick="this.closest('.modal').style.display='none'">&times;</button></div>`;
-            if (!vpnId) {
-                content.innerHTML = h + `<p class="text-rose-500 text-sm font-bold">This order has no VPN ID. Reject it or ask user to order again.</p>`;
-                document.getElementById('stock-select-modal').style.display = 'flex';
-                return;
-            }
+            let h = `<div class="mb-4 font-bold flex justify-between">Deliver ${qty} account(s) <button onclick="this.closest('.modal').style.display='none'">&times;</button></div>`;
             try {
-                const snap = await get(ref(db, `vpns/${vpnId}/stock`));
-                if (snap.exists()) {
+                let snap = null;
+                if (vpnId) snap = await get(ref(db, `vpns/${vpnId}/stock`));
+                if (snap && snap.exists()) {
+                    h += `<b class="text-xs">Pick ${qty} from stock</b><div class="mt-2">`;
                     Object.keys(snap.val()).forEach(sk => {
                         const stock = snap.val()[sk] || {};
-                        h += `<label class="flex items-center gap-3 w-full p-4 bg-slate-50 mb-2 rounded-xl font-bold text-xs"><input type="checkbox" class="stk-pick" value="${sk}"> ${esc(stock.email || 'No email')}</label>`;
+                        h += `<label class="flex items-center gap-3 w-full p-4 bg-slate-50 mb-2 rounded-xl font-bold text-xs"><input type="checkbox" class="stk-pick" value="${sk}"> ${esc(stock.email || 'No email')}${stock.pass ? '' : ' (no password)'}</label>`;
                     });
-                    h += `<button onclick="approveSelected('${orderId}','${vpnId}',${Number(qty) || 1})" class="btn-p mt-3">Deliver</button>`;
-                } else h += `<p class="text-rose-500 text-sm font-bold">Stock empty! Add stock first.</p>`;
+                    h += `<button onclick="approveSelected('${orderId}','${vpnId}',${qty})" class="btn-p mt-2">Deliver from stock</button></div>`;
+                } else h += `<p class="text-[11px] font-bold text-slate-400">No stock for this VPN. Deliver manually below.</p>`;
+                h += `<div class="mt-5 pt-4 border-t"><b class="text-xs">Deliver manually (ID / Password)</b>`;
+                for (let i = 0; i < qty; i++) h += `<div class="grid grid-cols-2 gap-2 mt-2"><input type="text" class="adm-mini-input man-e" placeholder="Email / ID ${i + 1}"><input type="text" class="adm-mini-input man-p" placeholder="Password"></div>`;
+                h += `<button onclick="manualDeliver('${orderId}',${qty})" class="btn-p mt-3">Deliver manually</button></div>`;
                 content.innerHTML = h; document.getElementById('stock-select-modal').style.display = 'flex';
             } catch (err) { dbError('Load stock', err); }
+        };
+
+        window.manualDeliver = async (orderId, qty) => {
+            if (!isAdmin()) return;
+            const es = [...document.querySelectorAll('.man-e')], ps = [...document.querySelectorAll('.man-p')];
+            const accounts = es.map((e, i) => ({ email: e.value.trim(), pass: (ps[i].value || '').trim() }));
+            if (accounts.length !== qty || accounts.some(a => !a.email || !a.pass)) return notify('Fill all ID and password fields', 'warning');
+            try {
+                let won = false;
+                await runTransaction(ref(db, `orders/${orderId}`), (o) => { won = false; if (o && o.st === 'Pending') { o.st = 'Approved'; o.email = accounts[0].email; o.pass = accounts[0].pass; o.accounts = accounts; o.manual = true; won = true; } return o; });
+                document.getElementById('stock-select-modal').style.display = 'none';
+                notify(won ? 'Account(s) delivered' : 'Already handled', won ? 'success' : 'warning');
+            } catch (err) { dbError('Manual delivery', err); }
         };
 
         window.approveSelected = async (orderId, vpnId, qty) => {
