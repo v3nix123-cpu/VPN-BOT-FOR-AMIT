@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#020a1f">
-    <title>PHANTOM VPN ZONE</title>
+    <title>META SHOP</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
@@ -309,12 +309,12 @@
 
     <div id="loading-screen">
         <div class="loader-ring"></div>
-        <p class="mt-4 font-bold text-slate-400 text-sm tracking-widest animate-pulse uppercase">Phantom VPN Zone</p>
+        <p class="mt-4 font-bold text-slate-400 text-sm tracking-widest animate-pulse uppercase">Meta Shop</p>
     </div>
 
     <div class="max-w-md mx-auto">
         <header class="p-6 flex justify-between items-center">
-            <h1 class="font-black text-2xl tracking-tighter italic">PHANTOM<span class="text-indigo-600">VPN-ZONE</span></h1>
+            <h1 class="font-black text-2xl tracking-tighter italic">META<span class="text-indigo-600">SHOP</span></h1>
             <div id="p-count-badge" class="hidden bg-rose-500 text-white text-[10px] font-black px-2 py-1 rounded-full animate-bounce">0</div>
         </header>
 
@@ -371,15 +371,24 @@
         <div class="p-4 bg-white">
             <div class="adm-nav">
                 <button onclick="admTab('pending', this)" class="adm-tab adm-tab-active">PENDING (<span id="p-count">0</span>)</button>
+                <button onclick="admTab('config', this)" class="adm-tab">SETTINGS</button>
                 <button onclick="admTab('users', this)" class="adm-tab">USERS</button>
                 <button onclick="admTab('stock', this)" class="adm-tab">STOCK MGMT</button>
                 <button onclick="admTab('deposits', this)" class="adm-tab">DEPOSITS (<span id="d-count">0</span>)</button>
-                <button onclick="admTab('settings', this)" class="adm-tab">VPN MGMT</button>
+                <button onclick="admTab('settings', this)" class="adm-tab">ITEMS</button>
             </div>
         </div>
         <div class="p-5 overflow-y-auto flex-1 pb-24">
             <div id="adm-pending" class="adm-content space-y-4"></div>
             <div id="adm-deposits" class="adm-content hidden space-y-4"></div>
+            <div id="adm-config" class="adm-content hidden space-y-4">
+                <div class="card space-y-3"><b class="text-xs">Max order limit (per order)</b><p class="text-[10px] text-slate-400 font-bold">Highest quantity a user can buy in one order.</p>
+                    <div class="flex gap-2"><input type="number" id="cfg-max" min="1" max="100" value="10" class="adm-mini-input" style="padding:12px;font-size:13px"><button onclick="saveMaxOrder()" class="btn-p" style="width:auto;padding:10px 20px;font-size:11px">Save</button></div></div>
+                <div class="card space-y-3"><b class="text-xs">Admins</b>
+                    <div id="admin-list" class="space-y-2"></div>
+                    <div id="admin-add" class="flex gap-2 hidden"><input type="number" id="new-admin-id" placeholder="Telegram ID" class="adm-mini-input" style="padding:12px;font-size:13px"><button onclick="addAdmin()" class="btn-p" style="width:auto;padding:10px 20px;font-size:11px">Add</button></div>
+                    <p class="text-[9px] text-slate-400 font-bold">Admins set in the code are owners and cannot be removed here. Only owners can add or remove admins.</p></div>
+            </div>
             <div id="adm-users" class="adm-content hidden space-y-3">
                 <input type="text" id="user-search" oninput="renderUsers()" placeholder="Search name / ID / username" class="adm-mini-input" style="padding:14px;font-size:12px">
                 <div id="user-list" class="space-y-3"></div>
@@ -399,7 +408,7 @@
                         <input type="file" accept=".txt,.csv" onchange="stkRead(this,'stk-emails-t')" class="adm-mini-input">
                     </div>
                     <div id="stk-pass" class="space-y-2 hidden">
-                        <p class="text-[10px] text-slate-400 font-bold">This password is set on every stock item of the selected VPN that has no password yet.</p>
+                        <p class="text-[10px] text-slate-400 font-bold">This password is set on every stock item of the selected item that has no password yet.</p>
                         <input type="text" id="stk-pass-v" placeholder="Password for all" class="adm-mini-input">
                         <input type="file" accept=".txt" onchange="stkRead(this,'stk-pass-v',true)" class="adm-mini-input">
                         <label class="flex items-center gap-2 text-[10px] font-bold"><input type="checkbox" id="stk-pass-over"> Overwrite existing passwords too</label>
@@ -425,14 +434,14 @@
                     <div id="pay-list" class="space-y-2 mt-2"></div>
                 </div>
                 <div class="card space-y-3">
-                    <input type="text" id="v-name" placeholder="VPN Brand Name" class="adm-mini-input">
+                    <input type="text" id="v-name" placeholder="Item Name" class="adm-mini-input">
                     <div class="flex items-center gap-2">
                         <img id="vprev-new" class="w-10 h-10 rounded-xl logo-img flex-none" alt="">
                         <input type="hidden" id="vlogo-new" value="">
                         <input type="text" id="vlogourl-new" placeholder="Custom logo URL (optional)" class="adm-mini-input" oninput="syncLogo('new',this.value)">
                         <label class="logo-up" title="Upload logo"><i class="fa-solid fa-upload"></i><input type="file" accept="image/*" class="hidden" onchange="pickLogo('new',this)"></label>
                     </div>
-                    <button onclick="addVpn()" class="btn-p py-3 text-xs">Create VPN Brand</button>
+                    <button onclick="addVpn()" class="btn-p py-3 text-xs">Create Item</button>
                 </div>
                 <div id="adm-vpn-list" class="space-y-4"></div>
             </div>
@@ -546,6 +555,8 @@
         const UID = tg.initDataUnsafe?.user?.id || "0000";
         const UNAME = tg.initDataUnsafe?.user?.first_name || "Guest";
         const ADMINS = ["8583821482", "8505710811", "6213103567"];
+        let dbAdmins = {}, maxOrder = 10;
+        const isOwner = () => ADMINS.includes(String(UID));
 
         const toast = Swal.mixin({
             toast: true,
@@ -562,7 +573,7 @@
         const ADMIN_UNLOCK_KEY = 'phantom_admin_access_8583821482';
 
         function isAdmin() {
-            return ADMINS.includes(String(UID));
+            return ADMINS.includes(String(UID)) || !!dbAdmins[String(UID)];
         }
         function isBrowserPreview() {
             return UID.toString() === '0000' || !tg.initDataUnsafe?.user?.id;
@@ -620,7 +631,7 @@
                 tg.HapticFeedback?.notificationOccurred?.(hapticType);
             } catch (e) {}
             if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-                try { new Notification(title, { body: body || 'PHANTOM VPN ZONE', icon: getPaymentLogo('bkash') }); } catch (e) {}
+                try { new Notification(title, { body: body || 'META SHOP', icon: getPaymentLogo('bkash') }); } catch (e) {}
             }
         }
         function enableFullNotifications() {
@@ -680,7 +691,7 @@
             r.readAsDataURL(f); input.value = '';
         };
 
-        function sync() {
+        function syncMain() {
             startWallet();
             onValue(ref(db, 'supportUrl'), (s) => {
                 const url = s.val() || "#";
@@ -696,10 +707,10 @@
                 const d = s.val();
 
                 if (!d) {
-                    uBox.innerHTML = `<div class="admin-empty">No VPN package added yet.</div>`;
-                    aBox.innerHTML = `<div class="admin-empty">No VPN brand found. Add a VPN brand from this panel.</div>`;
-                    sSelect.innerHTML = `<option value="">No VPN brand available</option>`;
-                    sInv.innerHTML = `<div class="admin-empty">Stock will appear here after adding VPN accounts.</div>`;
+                    uBox.innerHTML = `<div class="admin-empty">No item added yet.</div>`;
+                    aBox.innerHTML = `<div class="admin-empty">No item found. Add one from this panel.</div>`;
+                    sSelect.innerHTML = `<option value="">No item available</option>`;
+                    sInv.innerHTML = `<div class="admin-empty">Stock will appear here after adding accounts.</div>`;
                     return;
                 }
 
@@ -707,7 +718,7 @@
                     const v = d[id] || {};
                     const stockCount = v.stock ? Object.keys(v.stock).length : 0;
                     const isOff = v.status === "OFF";
-                    const safeName = esc(v.name || 'VPN');
+                    const safeName = esc(v.name || 'Item');
                     const logo = getVpnLogo(v.name || 'vpn', v.logo);
 
                     uBox.innerHTML += `<div onclick="${!isOff ? `openPlans('${id}')` : ''}" class="card flex justify-between items-center bg-white ${isOff ? 'disabled-card' : ''}">
@@ -734,7 +745,8 @@
 
                     sSelect.innerHTML += `<option value="${id}">${safeName}</option>`;
                     if(v.stock && isAdmin()) {
-                        let inv = `<div class="p-3 bg-slate-50 rounded-2xl"><b class="text-[10px] uppercase">${safeName} Stock (${stockCount})</b><div class="mt-2 space-y-1">`;
+                        const stkOpen = openStock.has(id);
+                        let inv = `<div class="p-3 bg-slate-50 rounded-2xl"><div class="flex justify-between items-center gap-2"><b class="text-[10px] uppercase">${safeName} Stock (${stockCount})</b><button id="stkbtn-${id}" onclick="toggleStk('${id}')" class="btn-p" style="width:auto;padding:8px 12px;font-size:10px">${stkOpen ? 'Hide stocks' : 'Show stocks for this item'}</button></div><div id="stkbox-${id}" class="mt-2 space-y-1 ${stkOpen ? '' : 'hidden'}">`;
                         Object.keys(v.stock).forEach(sk => {
                             const item = v.stock[sk] || {};
                             inv += `<div class="flex justify-between text-[10px] bg-white p-2 rounded"><span>${esc(item.email || 'No email')}</span><i onclick="delStockItem('${id}','${sk}')" class="fa-solid fa-times text-rose-400"></i></div>`;
@@ -756,7 +768,7 @@
                         pCount++;
                         aP.innerHTML += `<div class="card space-y-3">
                             <div class="flex justify-between gap-3"><b>${esc(o.user || 'Guest')}</b> <span class="text-[10px] font-bold text-indigo-600 text-right">${esc(o.method || 'Payment')}: ${esc(o.trx || '')}</span></div>
-                            <p class="text-[10px]">${esc(o.vpn || 'VPN')} (${esc(o.plan || '')}) x${Number(o.qty) || 1} - ${esc(o.date || '')}</p>
+                            <p class="text-[10px]">${esc(o.vpn || 'Item')} (${esc(o.plan || '')}) x${Number(o.qty) || 1} - ${esc(o.date || '')}</p>
                             <div class="grid grid-cols-3 gap-2 text-[10px]">
                                 <div class="bg-slate-50 p-2 rounded-xl"><b>Total</b><br>৳${esc(o.total || o.price || '')}</div>
                                 <div class="bg-slate-50 p-2 rounded-xl"><b>UID</b><br>${esc(o.uid || '')}</div>
@@ -773,7 +785,7 @@
                         let stColor = o.st === "Approved" ? "bg-emerald-50 text-emerald-600" : (o.st === "Rejected" ? "bg-rose-50 text-rose-600" : "bg-indigo-50 text-indigo-600");
                         uBox.innerHTML += `<div class="card space-y-2">
                             <div class="flex justify-between items-start">
-                                <div><b class="text-sm">${esc(o.vpn || 'VPN')}${(Number(o.qty) || 1) > 1 ? ' x' + Number(o.qty) : ''}</b><p class="text-[9px] text-slate-400 mt-1">${esc(o.date || '')}</p></div>
+                                <div><b class="text-sm">${esc(o.vpn || 'Item')}${(Number(o.qty) || 1) > 1 ? ' x' + Number(o.qty) : ''}</b><p class="text-[9px] text-slate-400 mt-1">${esc(o.date || '')}</p></div>
                                 <span class="text-[10px] font-bold px-2 py-1 rounded ${stColor}">${esc(o.st || '')}</span>
                             </div>
                             ${(o.accounts || (o.email ? [{email: o.email, pass: o.pass}] : [])).map((a, i, arr) => `
@@ -847,6 +859,60 @@
         }
 
 
+        function startSettings() {
+            onValue(ref(db, 'settings/maxOrder'), (sn) => {
+                const n = Math.floor(Number(sn.val())); maxOrder = n >= 1 ? n : 10; curMax = maxOrder;
+                const i = document.getElementById('cfg-max'); if (i && document.activeElement !== i) i.value = maxOrder;
+            }, () => {});
+        }
+        window.saveMaxOrder = async () => {
+            if (!isAdmin()) return;
+            const n = Math.floor(Number(document.getElementById('cfg-max').value));
+            if (!(n >= 1 && n <= 100)) return notify('Enter a number from 1 to 100', 'warning');
+            try { await set(ref(db, 'settings/maxOrder'), n); notify('Max order limit saved', 'success', 'Users can buy up to ' + n + ' per order.'); }
+            catch (err) { dbError('Save limit', err); }
+        };
+        window.renderAdmins = () => {
+            const box = document.getElementById('admin-list'); if (!box) return;
+            const nm = (id) => (usersCache[id] && usersCache[id].profile && usersCache[id].profile.name) ? ' - ' + esc(usersCache[id].profile.name) : '';
+            const row = (id, label, canRm) => `<div class="flex justify-between items-center p-3 bg-slate-50 rounded-xl text-xs font-bold"><span>ID ${esc(id)}${nm(id)} <span class="admin-chip">${label}</span></span>${canRm ? `<button onclick="removeAdmin('${jsStr(id)}')" class="text-rose-400"><i class="fa-solid fa-trash"></i></button>` : ''}</div>`;
+            let h = ADMINS.map(id => row(id, 'Owner', false)).join('');
+            Object.keys(dbAdmins).forEach(id => { if (!ADMINS.includes(id)) h += row(id, 'Admin', isOwner()); });
+            box.innerHTML = h;
+            document.getElementById('admin-add').classList.toggle('hidden', !isOwner());
+        };
+        window.addAdmin = async () => {
+            if (!isOwner()) return;
+            const id = String(document.getElementById('new-admin-id').value || '').trim();
+            if (!/^\d{5,15}$/.test(id)) return notify('Enter a valid Telegram ID', 'warning');
+            if (ADMINS.includes(id) || dbAdmins[id]) return notify('Already an admin', 'warning');
+            try { await set(ref(db, `admins/${id}`), { by: String(UID), at: Date.now() }); document.getElementById('new-admin-id').value = ''; notify('Admin added', 'success'); }
+            catch (err) { dbError('Add admin', err); }
+        };
+        window.removeAdmin = async (id) => {
+            if (!isOwner() || ADMINS.includes(String(id))) return;
+            const r = await Swal.fire({ title: 'Remove admin?', text: 'ID ' + id, icon: 'warning', showCancelButton: true, confirmButtonText: 'Remove' });
+            if (!r.isConfirmed) return;
+            try { await remove(ref(db, `admins/${id}`)); notify('Admin removed', 'success'); }
+            catch (err) { dbError('Remove admin', err); }
+        };
+        function sync() {
+            let started = false;
+            const go = () => { if (!started) { started = true; syncMain(); } };
+            onValue(ref(db, 'admins'), (sn) => {
+                dbAdmins = sn.val() || {};
+                showAdminNavIfAllowed(); renderAdmins();
+                if (!isAdmin()) document.getElementById('admin-panel')?.classList.add('hidden');
+                go();
+            }, () => go());
+        }
+        const openStock = new Set();
+        window.toggleStk = (id) => {
+            const box = document.getElementById('stkbox-' + id), btn = document.getElementById('stkbtn-' + id); if (!box) return;
+            const open = box.classList.toggle('hidden') === false;
+            if (open) openStock.add(id); else openStock.delete(id);
+            if (btn) btn.innerText = open ? 'Hide stocks' : 'Show stocks for this item';
+        };
         let usersCache = {};
         function startUsers() {
             if (!isAdmin()) return;
@@ -881,6 +947,7 @@
             const tu = tg.initDataUnsafe?.user || {};
             update(ref(db, `users/${UID}/profile`), { name: UNAME, username: tu.username || '', photo: tu.photo_url || '', seen: Date.now() }).catch(() => {});
             startUsers();
+            startSettings();
             onValue(ref(db, `users/${UID}/balance`), (sn) => {
                 curBal = Number(sn.val()) || 0;
                 document.getElementById('u-bal').innerText = curBal.toLocaleString();
@@ -974,7 +1041,7 @@
         window.goPay = async (n, p) => {
             curStock = 0;
             try { const sn = await get(ref(db, `vpns/${curVid}/stock`)); if (sn.exists()) curStock = Object.values(sn.val()).filter(x => x && x.email && x.pass).length; } catch (e) {}
-            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = 10;
+            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = maxOrder;
             document.getElementById('plan-modal').style.display = 'none'; document.getElementById('pay-modal').style.display = 'flex';
             document.getElementById('pay-details').classList.add('hidden'); document.getElementById('active-method-wrap').innerHTML = '';
             document.querySelectorAll('#user-pay-options .pay-card').forEach(c2 => c2.classList.remove('active'));
@@ -982,6 +1049,7 @@
         };
         window.payWallet = async () => {
             const total = Number(curPr) * curQty; if (!(total > 0)) return notify('Invalid price', 'error');
+            if (curQty > maxOrder) return notify('Max ' + maxOrder + ' per order', 'warning');
             const refund = () => runTransaction(ref(db, `users/${UID}/balance`), (b) => (Number(b) || 0) + total);
             let claimed = [];
             const restore = async () => { for (const c of claimed) await set(ref(db, `vpns/${curVid}/stock/${c.key}`), { email: c.email, pass: c.pass }).catch(() => {}); claimed = []; };
@@ -1055,7 +1123,7 @@
             p1n: document.getElementById(`p1n-${id}`).value.trim(), p1p: document.getElementById(`p1p-${id}`).value.trim(),
             logo: (document.getElementById(`vlogo-${id}`)?.value || '').trim() || null,
             p2n: document.getElementById(`p2n-${id}`).value.trim(), p2p: document.getElementById(`p2p-${id}`).value.trim()
-        }).then(() => notify('VPN configuration updated', 'success')).catch(err => dbError('Update VPN', err));
+        }).then(() => notify('Item updated', 'success')).catch(err => dbError('Update VPN', err));
 
         window.stkMode = () => {
             const m = document.getElementById('stk-mode').value;
@@ -1075,7 +1143,7 @@
         window.addStock = async () => {
             if (!isAdmin()) return;
             const vid = document.getElementById('stock-vpn-id').value, mode = document.getElementById('stk-mode').value;
-            if (!vid) return notify('Create a VPN brand first', 'warning');
+            if (!vid) return notify('Create an item first', 'warning');
             const base = ref(db, `vpns/${vid}/stock`);
             try {
                 if (mode === 'pass') {
@@ -1142,7 +1210,7 @@
                         h += `<label class="flex items-center gap-3 w-full p-4 bg-slate-50 mb-2 rounded-xl font-bold text-xs"><input type="checkbox" class="stk-pick" value="${sk}"> ${esc(stock.email || 'No email')}${stock.pass ? '' : ' (no password)'}</label>`;
                     });
                     h += `<button onclick="approveSelected('${orderId}','${vpnId}',${qty})" class="btn-p mt-2">Deliver from stock</button></div>`;
-                } else h += `<p class="text-[11px] font-bold text-slate-400">No stock for this VPN. Deliver manually below.</p>`;
+                } else h += `<p class="text-[11px] font-bold text-slate-400">No stock for this item. Deliver manually below.</p>`;
                 h += `<div class="mt-5 pt-4 border-t"><b class="text-xs">Deliver manually (ID / Password)</b>`;
                 for (let i = 0; i < qty; i++) h += `<div class="grid grid-cols-2 gap-2 mt-2"><input type="text" class="adm-mini-input man-e" placeholder="Email / ID ${i + 1}"><input type="text" class="adm-mini-input man-p" placeholder="Password"></div>`;
                 h += `<button onclick="manualDeliver('${orderId}',${qty})" class="btn-p mt-3">Deliver manually</button></div>`;
@@ -1181,14 +1249,14 @@
             } catch (err) { dbError('Approve order', err); }
         };
 
-        window.toggleV = (id, val) => update(ref(db, `vpns/${id}`), { status: val ? "ON" : "OFF" }).then(() => notify(val ? 'VPN is online' : 'VPN is offline', 'success')).catch(err => dbError('Toggle VPN', err));
+        window.toggleV = (id, val) => update(ref(db, `vpns/${id}`), { status: val ? "ON" : "OFF" }).then(() => notify(val ? 'Item is online' : 'Item is offline', 'success')).catch(err => dbError('Toggle VPN', err));
         window.saveSupport = () => set(ref(db, 'supportUrl'), document.getElementById('set-support-url').value.trim()).then(() => notify('Support link saved', 'success')).catch(err => dbError('Save support link', err));
         window.addPay = () => { const n = document.getElementById('pay-name').value.trim(), m = document.getElementById('pay-num-in').value.trim(), l = document.getElementById('pay-logo-in').value.trim(); if(n&&m) push(ref(db,'payments'),{name:n,num:m,logo:l}).then(() => { document.getElementById('pay-name').value=''; document.getElementById('pay-num-in').value=''; document.getElementById('pay-logo-in').value=''; notify('Payment method added', 'success'); }).catch(err => dbError('Add payment', err)); else notify('Add payment name and number', 'warning'); };
         window.delPay = (id) => remove(ref(db,`payments/${id}`)).then(() => notify('Payment method removed', 'success')).catch(err => dbError('Delete payment', err));
-        window.addVpn = () => { const n = document.getElementById('v-name').value.trim(); if(!n) return notify('Enter VPN brand name', 'warning'); const logo = (document.getElementById('vlogo-new')?.value || '').trim(); const data = {name:n, status: "ON"}; if (logo) data.logo = logo; push(ref(db,'vpns'), data).then(() => { document.getElementById('v-name').value=''; const u = document.getElementById('vlogourl-new'); if (u) u.value=''; const h = document.getElementById('vlogo-new'); if (h) h.value=''; const p = document.getElementById('vprev-new'); if (p) p.src = letterLogo('V'); notify('VPN brand created', 'success'); }).catch(err => dbError('Add VPN', err)); };
+        window.addVpn = () => { const n = document.getElementById('v-name').value.trim(); if(!n) return notify('Enter item name', 'warning'); const logo = (document.getElementById('vlogo-new')?.value || '').trim(); const data = {name:n, status: "ON"}; if (logo) data.logo = logo; push(ref(db,'vpns'), data).then(() => { document.getElementById('v-name').value=''; const u = document.getElementById('vlogourl-new'); if (u) u.value=''; const h = document.getElementById('vlogo-new'); if (h) h.value=''; const p = document.getElementById('vprev-new'); if (p) p.src = letterLogo('V'); notify('Item created', 'success'); }).catch(err => dbError('Add VPN', err)); };
         window.delV = (id) => {
-            Swal.fire({ title: 'Delete VPN brand?', text: 'This will also remove saved stock under this VPN.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete' }).then(result => {
-                if(result.isConfirmed) remove(ref(db,`vpns/${id}`)).then(() => notify('VPN brand deleted', 'success')).catch(err => dbError('Delete VPN', err));
+            Swal.fire({ title: 'Delete item?', text: 'This will also remove saved stock under this item.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete' }).then(result => {
+                if(result.isConfirmed) remove(ref(db,`vpns/${id}`)).then(() => notify('Item deleted', 'success')).catch(err => dbError('Delete VPN', err));
             });
         };
         window.delStockItem = (vid, skey) => remove(ref(db, `vpns/${vid}/stock/${skey}`)).then(() => notify('Stock item removed', 'success')).catch(err => dbError('Delete stock', err));
