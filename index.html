@@ -750,7 +750,7 @@
                         </div>`;
                     }
                     if(o.uid == UID) {
-                        currentUserOrderStates[id] = o.st;
+                        currentUserOrderStates[id] = o.st; myOrders[id] = o;
                         let stColor = o.st === "Approved" ? "bg-emerald-50 text-emerald-600" : (o.st === "Rejected" ? "bg-rose-50 text-rose-600" : "bg-indigo-50 text-indigo-600");
                         uBox.innerHTML += `<div class="card space-y-2">
                             <div class="flex justify-between items-start">
@@ -769,6 +769,7 @@
                                     <i class="fa-regular fa-copy text-indigo-400 text-xs"></i>
                                 </div>
                             </div>`).join('')}
+                            ${o.st === "Approved" && (o.accounts || o.email) ? `<button onclick="downloadOrder('${id}')" class="btn-p mt-3" style="padding:12px;font-size:12px"><i class="fa-solid fa-download"></i> Download file</button>` : ''}
                             ${o.st === "Rejected" ? `<p class="text-[9px] text-rose-500 font-bold italic mt-2">Order was rejected by admin.</p>` : ''}
                         </div>`;
                     }
@@ -1213,6 +1214,22 @@
                 });
             }
         });
+        const myOrders = {};
+        window.downloadOrder = (id) => {
+            const o = myOrders[id]; if (!o || o.st !== 'Approved') return;
+            const list = o.accounts || (o.email ? [{ email: o.email, pass: o.pass }] : []);
+            if (!list.length) return;
+            const text = list.map(a => `${a.email}|${a.pass}`).join('\n') + '\n';
+            const name = (String(o.vpn || 'accounts').replace(/[^\w\-]+/g, '_') + '_' + id.slice(-5) + '.txt');
+            try {
+                const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+                const a = document.createElement('a'); a.href = url; a.download = name;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 4000);
+            } catch (e) {}
+            try { navigator.clipboard.writeText(text); } catch (e) {}
+            notify('File downloaded', 'success', 'Also copied to clipboard.');
+        };
         window.copyText = (t) => { navigator.clipboard.writeText(t); notify('Copied', 'success'); };
     </script>
 </body>
