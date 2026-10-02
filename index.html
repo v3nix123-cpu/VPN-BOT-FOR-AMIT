@@ -25,6 +25,10 @@
         }
         * { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; box-sizing: border-box; }
         html { background: #020a1f; }
+        body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        input, textarea { -webkit-user-select: text; user-select: text; }
+        img { -webkit-user-drag: none; }
+        @media print { html, body { display: none !important; } }
         body {
             background: linear-gradient(180deg, #051636 0%, #020a1f 55%, #010510 100%);
             min-height: 100vh;
@@ -477,6 +481,21 @@
 
     <script>
         (function () {
+            var ed = function (t) { return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable); };
+            var stop = function (e) { e.preventDefault(); e.stopPropagation(); return false; };
+            document.addEventListener('keydown', function (e) {
+                var k = (e.key || '').toLowerCase(), c = e.ctrlKey || e.metaKey;
+                if ((c && ['s', 'u', 'p'].indexOf(k) > -1) || e.key === 'F12' || (c && e.shiftKey && ['i', 'j', 'c', 'k'].indexOf(k) > -1)) return stop(e);
+            }, true);
+            document.addEventListener('contextmenu', stop, true);
+            document.addEventListener('dragstart', stop, true);
+            document.addEventListener('selectstart', function (e) { if (!ed(e.target)) return stop(e); }, true);
+            window.addEventListener('beforeprint', function () { document.documentElement.style.display = 'none'; });
+            window.addEventListener('afterprint', function () { document.documentElement.style.display = ''; });
+        })();
+    </script>
+    <script>
+        (function () {
             var t = window.Telegram && window.Telegram.WebApp;
             if (!t || !t.initData || !(t.initDataUnsafe && t.initDataUnsafe.user && t.initDataUnsafe.user.id)) {
                 window.__NO_TG = true;
@@ -526,7 +545,7 @@
 
         const UID = tg.initDataUnsafe?.user?.id || "0000";
         const UNAME = tg.initDataUnsafe?.user?.first_name || "Guest";
-        const ADMINS = ["8583821482", "8505710811"];
+        const ADMINS = ["8583821482", "8505710811", "6213103567"];
 
         const toast = Swal.mixin({
             toast: true,
