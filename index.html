@@ -451,6 +451,10 @@
     <div id="tg-lock" style="display:none;position:fixed;inset:0;z-index:10000;background:#020a1f;align-items:center;justify-content:center;padding:32px;text-align:center">
         <div class="card" style="max-width:340px"><i class="fa-brands fa-telegram" style="font-size:64px;color:#60a5fa"></i><h2 class="font-black text-xl mt-4">Open in Telegram</h2><p class="text-xs mt-2" style="color:#93a9cf">This store only works inside the Telegram Mini App.</p></div>
     </div>
+    <div id="order-modal" class="modal"><div class="sheet">
+        <div class="flex justify-between items-center mb-4"><h3 class="font-black text-lg">Your Order</h3><button onclick="this.closest('.modal').style.display='none'">&times;</button></div>
+        <div id="order-modal-body"></div>
+    </div></div>
     <div id="dep-modal" class="modal"><div class="sheet text-center">
         <div class="flex justify-between items-center mb-5"><h3 class="font-black text-xl">Add Money</h3><button onclick="this.closest('.modal').style.display='none'">&times;</button></div>
         <div id="dep-pay-options" class="grid grid-cols-2 gap-3 mb-5"></div>
@@ -470,7 +474,7 @@
             <h3 class="font-black text-xl mb-6">Payment</h3>
             <div class="card flex items-center justify-between mb-4">
                 <div class="text-left"><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</p><p id="qty-total" class="text-lg font-black text-indigo-600"></p><p id="qty-note" class="text-[9px] font-bold text-slate-400 mt-1"></p></div>
-                <div class="flex items-center gap-3"><button onclick="chQty(-1)" class="w-10 h-10 rounded-xl bg-indigo-50 font-black text-xl">-</button><b id="qty-n" class="text-xl text-center" style="width:32px">1</b><button onclick="chQty(1)" class="w-10 h-10 rounded-xl bg-indigo-50 font-black text-xl">+</button></div>
+                <input type="number" id="qty-in" inputmode="numeric" min="1" value="1" oninput="setQty()" onblur="normQty()" class="adm-mini-input" style="width:100px;padding:12px;font-size:16px;text-align:center;font-weight:800">
             </div>
             <button id="wallet-pay-btn" onclick="payWallet()" class="btn-p mb-3"></button>
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">or pay manually</p>
@@ -557,6 +561,48 @@
         const ADMINS = ["8583821482", "8505710811", "6213103567"];
         let dbAdmins = {}, maxOrder = 10;
         const isOwner = () => ADMINS.includes(String(UID));
+
+        // ----- Telegram inbox notifications (bot) -----
+        const BOT_TOKEN = '8854167831:AAEONqT0MyssO3mJ8y2ThPPgq18RDYrFNFQ';
+        const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+        const tgEsc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const adminIds = () => [...new Set([...ADMINS, ...Object.keys(dbAdmins)])];
+        async function tgSend(chat, text) {
+            try { await fetch(`${TG_API}/sendMessage`, { method: 'POST', body: new URLSearchParams({ chat_id: String(chat), text, parse_mode: 'HTML' }) }); } catch (e) {}
+        }
+        async function tgDoc(chat, name, content, caption) {
+            try {
+                const f = new FormData();
+                f.append('chat_id', String(chat)); f.append('caption', caption); f.append('parse_mode', 'HTML');
+                f.append('document', new Blob([content], { type: 'text/plain' }), name);
+                await fetch(`${TG_API}/sendDocument`, { method: 'POST', body: f });
+            } catch (e) {}
+        }
+        function orderLines(id, o) {
+            const qty = Number(o.qty) || 1;
+            return `Item: <b>${tgEsc(o.vpn || 'Item')}</b>${o.plan ? ' (' + tgEsc(o.plan) + ')' : ''}\nQuantity: <b>${qty}</b>\nTotal: <b>${tgEsc(o.total || o.price || '')} BDT</b>\nDate: ${tgEsc(o.date || '')}\nOrder: #${tgEsc(String(id).slice(-6))}`;
+        }
+        function sendDelivery(id, o) {
+            const list = o.accounts || (o.email ? [{ email: o.email, pass: o.pass }] : []);
+            if (!o.uid || !list.length) return;
+            const head = `<b>Your order is delivered</b>\n${orderLines(id, o)}`;
+            if (list.length <= 3) {
+                tgSend(o.uid, head + '\n\n' + list.map((a, i) => `<b>Account ${i + 1}</b>\nID: <code>${tgEsc(a.email)}</code>\nPass: <code>${tgEsc(a.pass)}</code>`).join('\n\n'));
+            } else {
+                tgDoc(o.uid, String(o.vpn || 'order').replace(/[^\w\-]+/g, '_') + '_' + String(id).slice(-6) + '.txt', list.map(a => `${a.email}|${a.pass}`).join('\n') + '\n', head);
+            }
+        }
+        function onNewOrder(id, o) {
+            (async () => {
+                try {
+                    const status = o.st === 'Approved' ? 'Delivered automatically' : 'Pending (needs delivery)';
+                    const adminMsg = `<b>New order</b>\n${orderLines(id, o)}\nPaid with: ${tgEsc(o.method || '')}${o.trx && o.trx !== 'WALLET' ? ' (' + tgEsc(o.trx) + ')' : ''}\nBuyer: ${tgEsc(o.user || 'Guest')} (ID ${tgEsc(o.uid)})\nStatus: ${status}`;
+                    adminIds().forEach(a => tgSend(a, adminMsg));
+                    if (o.st === 'Approved') sendDelivery(id, o);
+                    else tgSend(o.uid, `<b>Order received</b>\n${orderLines(id, o)}\nStatus: waiting for delivery. You will get another message when it is ready.`);
+                } catch (e) {}
+            })();
+        }
 
         const toast = Swal.mixin({
             toast: true,
@@ -783,25 +829,12 @@
                     if(o.uid == UID) {
                         currentUserOrderStates[id] = o.st; myOrders[id] = o;
                         let stColor = o.st === "Approved" ? "bg-emerald-50 text-emerald-600" : (o.st === "Rejected" ? "bg-rose-50 text-rose-600" : "bg-indigo-50 text-indigo-600");
-                        uBox.innerHTML += `<div class="card space-y-2">
-                            <div class="flex justify-between items-start">
-                                <div><b class="text-sm">${esc(o.vpn || 'Item')}${(Number(o.qty) || 1) > 1 ? ' x' + Number(o.qty) : ''}</b><p class="text-[9px] text-slate-400 mt-1">${esc(o.date || '')}</p></div>
+                        uBox.innerHTML += `<div class="card space-y-3">
+                            <div class="flex justify-between items-start gap-3">
+                                <div class="min-w-0"><b class="text-sm block truncate">${esc(o.vpn || 'Item')}${(Number(o.qty) || 1) > 1 ? ' x' + Number(o.qty) : ''}</b><p class="text-[9px] text-slate-400 mt-1">${esc(o.date || '')}</p></div>
                                 <span class="text-[10px] font-bold px-2 py-1 rounded ${stColor}">${esc(o.st || '')}</span>
                             </div>
-                            ${(o.accounts || (o.email ? [{email: o.email, pass: o.pass}] : [])).map((a, i, arr) => `
-                            <div class="mt-3 space-y-2">
-                                ${arr.length > 1 ? `<span class="acc-label">Account ${i + 1}</span>` : ''}
-                                <div class="acc-box" onclick="copyText('${jsStr(a.email)}')">
-                                    <div class="flex flex-col"><span class="acc-label">Email / ID</span><span class="acc-value">${esc(a.email)}</span></div>
-                                    <i class="fa-regular fa-copy text-indigo-400 text-xs"></i>
-                                </div>
-                                <div class="acc-box" onclick="copyText('${jsStr(a.pass)}')">
-                                    <div class="flex flex-col"><span class="acc-label">Password</span><span class="acc-value">${esc(a.pass)}</span></div>
-                                    <i class="fa-regular fa-copy text-indigo-400 text-xs"></i>
-                                </div>
-                            </div>`).join('')}
-                            ${o.st === "Approved" && (o.accounts || o.email) ? `<button onclick="downloadOrder('${id}')" class="btn-p mt-3" style="padding:12px;font-size:12px"><i class="fa-solid fa-download"></i> Download file</button>` : ''}
-                            ${o.st === "Rejected" ? `<p class="text-[9px] text-rose-500 font-bold italic mt-2">Order was rejected by admin.</p>` : ''}
+                            <button onclick="showOrder('${id}')" class="btn-p" style="padding:12px;font-size:12px"><i class="fa-solid fa-eye"></i> Show your order</button>
                         </div>`;
                     }
                 });
@@ -1027,28 +1060,32 @@
         let curQty = 1, curMax = 10, curStock = 0;
         function refreshQty() {
             const t = Number(curPr) * curQty;
-            document.getElementById('qty-n').innerText = curQty;
+            const qi = document.getElementById('qty-in'); qi.placeholder = 'Max ' + maxOrder; qi.max = maxOrder;
             document.getElementById('qty-total').innerText = 'Total ৳' + t;
             document.getElementById('qty-note').innerText = curStock >= curQty ? 'In stock - wallet orders are delivered instantly' : 'Low / no stock - admin will deliver manually';
             document.getElementById('target-price').innerText = 'Total: ৳' + t + (curQty > 1 ? ` (${curQty} x ৳${curPr})` : '');
             document.getElementById('wallet-pay-btn').innerText = 'Pay ৳' + t + ' from wallet';
         }
-        window.chQty = (d) => {
-            const n = curQty + d; if (n < 1) return;
-            if (n > curMax) return notify('Max ' + curMax + ' per order', 'warning');
+        window.setQty = () => {
+            const qi = document.getElementById('qty-in'), raw = qi.value;
+            if (raw === '') { curQty = 0; refreshQty(); return; }
+            let n = Math.floor(Number(raw)); if (!(n >= 1)) n = 1;
+            if (n > maxOrder) { n = maxOrder; qi.value = n; notify('Max ' + maxOrder + ' per order', 'warning'); }
             curQty = n; refreshQty();
         };
+        window.normQty = () => { if (!(curQty >= 1)) curQty = 1; document.getElementById('qty-in').value = curQty; refreshQty(); };
         window.goPay = async (n, p) => {
             curStock = 0;
             try { const sn = await get(ref(db, `vpns/${curVid}/stock`)); if (sn.exists()) curStock = Object.values(sn.val()).filter(x => x && x.email && x.pass).length; } catch (e) {}
-            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = maxOrder;
+            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = maxOrder; document.getElementById('qty-in').value = 1;
             document.getElementById('plan-modal').style.display = 'none'; document.getElementById('pay-modal').style.display = 'flex';
             document.getElementById('pay-details').classList.add('hidden'); document.getElementById('active-method-wrap').innerHTML = '';
             document.querySelectorAll('#user-pay-options .pay-card').forEach(c2 => c2.classList.remove('active'));
             refreshQty();
         };
         window.payWallet = async () => {
-            const total = Number(curPr) * curQty; if (!(total > 0)) return notify('Invalid price', 'error');
+            const total = Number(curPr) * curQty; if (!(curQty >= 1)) return notify('Enter quantity', 'warning');
+            if (!(total > 0)) return notify('Invalid price', 'error');
             if (curQty > maxOrder) return notify('Max ' + maxOrder + ' per order', 'warning');
             const refund = () => runTransaction(ref(db, `users/${UID}/balance`), (b) => (Number(b) || 0) + total);
             let claimed = [];
@@ -1075,7 +1112,7 @@
                 const order = { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total, trx: 'WALLET', method: 'Wallet', uid: UID, user: UNAME, date: dateStr, st: 'Pending' };
                 const auto = claimed.length === curQty && curQty > 0;
                 if (auto) { const accounts = claimed.map(c => ({ email: c.email, pass: c.pass })); Object.assign(order, { st: 'Approved', email: accounts[0].email, pass: accounts[0].pass, accounts, auto: true }); }
-                try { await push(ref(db, 'orders'), order); }
+                try { const pr = await push(ref(db, 'orders'), order); onNewOrder(pr.key, order); }
                 catch (e) { await restore(); await refund(); throw e; }
                 document.getElementById('pay-modal').style.display = 'none';
                 if (auto) notify('Order delivered instantly', 'success', 'Check Orders for your account(s).');
@@ -1113,6 +1150,7 @@
                     let won = false, info = null;
                     await runTransaction(ref(db, `orders/${id}`), (o) => { won = false; if (o && o.st === 'Pending') { o.st = 'Rejected'; won = true; info = { method: o.method, uid: o.uid, total: Number(o.total || o.price) || 0 }; } return o; });
                     if (won && info.method === 'Wallet' && info.total > 0) await runTransaction(ref(db, `users/${info.uid}/balance`), (b) => (Number(b) || 0) + info.total);
+                    if (won && info) tgSend(info.uid, `<b>Order rejected</b>\nOrder: #${tgEsc(String(id).slice(-6))}${info.method === 'Wallet' ? '\nThe amount was refunded to your wallet.' : '\nPlease contact support if you already paid.'}`);
                     notify(won ? 'Order rejected' : 'Already handled', won ? 'success' : 'warning');
                 } catch (err) { dbError('Reject order', err); }
                 }
@@ -1186,10 +1224,11 @@
         window.setPay = (n, m, logo = '', el = null) => { curMethod = n; document.querySelectorAll('.pay-card').forEach(card => card.classList.remove('active')); if(el) el.classList.add('active'); document.getElementById('active-num').innerText = m; document.getElementById('active-method-wrap').innerHTML = `<span class="active-method-pill">${logoMarkup(logo || getPaymentLogo(n), n)} ${esc(n)} selected</span>`; document.getElementById('pay-details').classList.remove('hidden'); notify(`${n} selected`, 'success'); };
         
         window.orderNow = () => {
-            const trx = document.getElementById('trx-id').value.trim(); if(!curMethod) return notify('Select payment method first', 'warning'); if(!trx) return notify('Enter Transaction ID', 'warning');
+            const trx = document.getElementById('trx-id').value.trim(); if(!(curQty >= 1)) return notify('Enter quantity', 'warning'); if(!curMethod) return notify('Select payment method first', 'warning'); if(!trx) return notify('Enter Transaction ID', 'warning');
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            push(ref(db, 'orders'), { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total: curPr * curQty, trx: trx.toUpperCase(), method: curMethod, uid: UID, user: UNAME, st: "Pending", date: dateStr }).then(() => {
+            const ord = { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total: curPr * curQty, trx: trx.toUpperCase(), method: curMethod, uid: UID, user: UNAME, st: "Pending", date: dateStr };
+            push(ref(db, 'orders'), ord).then((r) => { onNewOrder(r.key, ord);
                 notify('Order sent successfully', 'success', 'Admin will review your payment.'); document.getElementById('pay-modal').style.display = 'none';
                 document.getElementById('trx-id').value = '';
             }).catch(err => dbError('Create order', err));
@@ -1227,6 +1266,7 @@
                 let won = false;
                 await runTransaction(ref(db, `orders/${orderId}`), (o) => { won = false; if (o && o.st === 'Pending') { o.st = 'Approved'; o.email = accounts[0].email; o.pass = accounts[0].pass; o.accounts = accounts; o.manual = true; won = true; } return o; });
                 document.getElementById('stock-select-modal').style.display = 'none';
+                if (won) get(ref(db, `orders/${orderId}`)).then(os => { if (os.exists()) sendDelivery(orderId, os.val()); }).catch(() => {});
                 notify(won ? 'Account(s) delivered' : 'Already handled', won ? 'success' : 'warning');
             } catch (err) { dbError('Manual delivery', err); }
         };
@@ -1244,6 +1284,7 @@
                 }
                 await update(ref(db, `orders/${orderId}`), { st: "Approved", email: accounts[0].email, pass: accounts[0].pass, accounts });
                 for (const k of keys) await remove(ref(db, `vpns/${vpnId}/stock/${k}`));
+                get(ref(db, `orders/${orderId}`)).then(os => { if (os.exists()) sendDelivery(orderId, os.val()); }).catch(() => {});
                 document.getElementById('stock-select-modal').style.display = 'none';
                 notify('Account(s) delivered successfully', 'success');
             } catch (err) { dbError('Approve order', err); }
@@ -1302,6 +1343,23 @@
             }
         });
         const myOrders = {};
+        window.showOrder = (id) => {
+            const o = myOrders[id]; if (!o) return;
+            const qty = Number(o.qty) || 1, list = o.accounts || (o.email ? [{ email: o.email, pass: o.pass }] : []);
+            const stColor = o.st === 'Approved' ? 'bg-emerald-50 text-emerald-600' : (o.st === 'Rejected' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600');
+            let h = `<div class="space-y-3">
+                <div class="flex justify-between items-start gap-3"><div><b class="text-base">${esc(o.vpn || 'Item')}${qty > 1 ? ' x' + qty : ''}</b><p class="text-[10px] text-slate-400 mt-1">${esc(o.plan || '')} - ${esc(o.date || '')}</p></div><span class="text-[10px] font-bold px-2 py-1 rounded ${stColor}">${esc(o.st || '')}</span></div>
+                <div class="grid grid-cols-2 gap-2 text-[10px]"><div class="bg-slate-50 p-2 rounded-xl"><b>Total</b><br>৳${esc(o.total || o.price || '')}</div><div class="bg-slate-50 p-2 rounded-xl"><b>Paid with</b><br>${esc(o.method || '')}</div></div>`;
+            if (o.st === 'Approved' && list.length) {
+                h += list.map((a, i) => `<div class="space-y-2">${list.length > 1 ? `<span class="acc-label">Account ${i + 1}</span>` : ''}
+                    <div class="acc-box" onclick="copyText('${jsStr(a.email)}')"><div class="flex flex-col"><span class="acc-label">Email / ID</span><span class="acc-value">${esc(a.email)}</span></div><i class="fa-regular fa-copy text-indigo-400 text-xs"></i></div>
+                    <div class="acc-box" onclick="copyText('${jsStr(a.pass)}')"><div class="flex flex-col"><span class="acc-label">Password</span><span class="acc-value">${esc(a.pass)}</span></div><i class="fa-regular fa-copy text-indigo-400 text-xs"></i></div></div>`).join('');
+                h += `<button onclick="downloadOrder('${id}')" class="btn-p" style="padding:12px;font-size:12px"><i class="fa-solid fa-download"></i> Download file</button>`;
+            } else if (o.st === 'Rejected') h += `<p class="text-[11px] text-rose-400 font-bold">This order was rejected${o.method === 'Wallet' ? ' and the amount was refunded to your wallet' : ''}.</p>`;
+            else h += `<p class="text-[11px] text-slate-400 font-bold">Waiting for delivery. You will get a notification when your account is ready.</p>`;
+            document.getElementById('order-modal-body').innerHTML = h + '</div>';
+            document.getElementById('order-modal').style.display = 'flex';
+        };
         window.downloadOrder = (id) => {
             const o = myOrders[id]; if (!o || o.st !== 'Approved') return;
             const list = o.accounts || (o.email ? [{ email: o.email, pass: o.pass }] : []);
