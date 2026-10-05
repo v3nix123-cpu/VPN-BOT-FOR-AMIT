@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#020a1f">
-    <title>META SHOP</title>
+    <title>META AI SHOP</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
@@ -314,7 +314,7 @@
 
     <div class="max-w-md mx-auto">
         <header class="p-6 flex justify-between items-center">
-            <h1 class="font-black text-2xl tracking-tighter italic">META<span class="text-indigo-600">SHOP</span></h1>
+            <h1 class="font-black text-2xl tracking-tighter italic">META AI <span class="text-indigo-600">SHOP</span></h1>
             <div id="p-count-badge" class="hidden bg-rose-500 text-white text-[10px] font-black px-2 py-1 rounded-full animate-bounce">0</div>
         </header>
 
@@ -476,9 +476,9 @@
                 <div class="text-left"><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</p><p id="qty-total" class="text-lg font-black text-indigo-600"></p><p id="qty-note" class="text-[9px] font-bold text-slate-400 mt-1"></p></div>
                 <input type="number" id="qty-in" inputmode="numeric" min="1" value="1" oninput="setQty()" onblur="normQty()" class="adm-mini-input" style="width:100px;padding:12px;font-size:16px;text-align:center;font-weight:800">
             </div>
+            <p class="text-[11px] font-bold text-slate-400 mb-3">Wallet balance: ৳<span id="pay-bal">0</span></p>
             <button id="wallet-pay-btn" onclick="payWallet()" class="btn-p mb-3"></button>
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">or pay manually</p>
-            <div id="user-pay-options" class="grid grid-cols-2 gap-3 mb-6"></div>
+            <div class="hidden"><div id="user-pay-options" class="grid grid-cols-2 gap-3 mb-6"></div>
             <div id="pay-details" class="hidden">
                 <div id="active-method-wrap" class="mb-4"></div>
                 <div class="bg-indigo-50 p-6 rounded-3xl mb-4" onclick="copyText(document.getElementById('active-num').innerText)">
@@ -487,7 +487,7 @@
                 <b id="target-price" class="text-xl block mb-6 text-indigo-600"></b>
                 <input type="text" id="trx-id" placeholder="Transaction ID" class="w-full p-4 border-2 rounded-2xl text-center uppercase mb-4 outline-none">
                 <button onclick="orderNow()" class="btn-p">Confirm Order</button>
-            </div>
+            </div></div>
         </div>
     </div>
 
@@ -578,28 +578,32 @@
                 await fetch(`${TG_API}/sendDocument`, { method: 'POST', body: f });
             } catch (e) {}
         }
-        function orderLines(id, o) {
-            const qty = Number(o.qty) || 1;
-            return `Item: <b>${tgEsc(o.vpn || 'Item')}</b>${o.plan ? ' (' + tgEsc(o.plan) + ')' : ''}\nQuantity: <b>${qty}</b>\nTotal: <b>${tgEsc(o.total || o.price || '')} BDT</b>\nDate: ${tgEsc(o.date || '')}\nOrder: #${tgEsc(String(id).slice(-6))}`;
+        const fmtNow = () => new Date().toLocaleString('en-GB', { hour12: false });
+        const orderTag = (id) => '#MA-' + String(id).slice(-8);
+        const money = (v) => 'Tk ' + (Number(v) || 0).toFixed(2);
+        function orderBlock(id, o, status) {
+            return `🆔 Order ID: ${tgEsc(orderTag(id))}\n📦 Product: ${tgEsc(o.vpn || 'Item')}\n🧮 Quantity: ${Number(o.qty) || 1} Pcs\n` + (o.plan ? `📅 Validity: ${tgEsc(o.plan)}\n` : '') + `💰 Price: ${money(o.total || o.price)}\n📊 Status: ${status}`;
         }
         function sendDelivery(id, o) {
             const list = o.accounts || (o.email ? [{ email: o.email, pass: o.pass }] : []);
             if (!o.uid || !list.length) return;
-            const head = `<b>Your order is delivered</b>\n${orderLines(id, o)}`;
+            const head = `📦 <b>Order Delivered</b> ✅\n\n${orderBlock(id, o, 'Delivered')}`;
+            const foot = `\n\n🕒 Delivered On: ${fmtNow()}\n🤝 Thank you — META AI SHOP`;
             if (list.length <= 3) {
-                tgSend(o.uid, head + '\n\n' + list.map((a, i) => `<b>Account ${i + 1}</b>\nID: <code>${tgEsc(a.email)}</code>\nPass: <code>${tgEsc(a.pass)}</code>`).join('\n\n'));
+                const details = '\n\n📝 <b>Details information</b>\n\n' + list.map((a, i) => `${i + 1}.\nEmail: <code>${tgEsc(a.email)}</code>\n\nPassword: <code>${tgEsc(a.pass)}</code>`).join('\n\n-----------------\n\n');
+                tgSend(o.uid, head + details + foot);
             } else {
-                tgDoc(o.uid, String(o.vpn || 'order').replace(/[^\w\-]+/g, '_') + '_' + String(id).slice(-6) + '.txt', list.map(a => `${a.email}|${a.pass}`).join('\n') + '\n', head);
+                tgDoc(o.uid, String(o.vpn || 'order').replace(/[^\w\-]+/g, '_') + '_' + String(id).slice(-6) + '.txt', list.map(a => `${a.email}|${a.pass}`).join('\n') + '\n', head + '\n\n📝 Details information is in the attached file (Email|Password)' + foot);
             }
         }
         function onNewOrder(id, o) {
             (async () => {
                 try {
                     const status = o.st === 'Approved' ? 'Delivered automatically' : 'Pending (needs delivery)';
-                    const adminMsg = `<b>New order</b>\n${orderLines(id, o)}\nPaid with: ${tgEsc(o.method || '')}${o.trx && o.trx !== 'WALLET' ? ' (' + tgEsc(o.trx) + ')' : ''}\nBuyer: ${tgEsc(o.user || 'Guest')} (ID ${tgEsc(o.uid)})\nStatus: ${status}`;
+                    const adminMsg = `🛒 <b>New Order</b>\n\n${orderBlock(id, o, status)}\n💳 Paid with: ${tgEsc(o.method || '')}\n👤 Buyer: ${tgEsc(o.user || 'Guest')} (ID ${tgEsc(o.uid)})\n🕒 ${fmtNow()}`;
                     adminIds().forEach(a => tgSend(a, adminMsg));
                     if (o.st === 'Approved') sendDelivery(id, o);
-                    else tgSend(o.uid, `<b>Order received</b>\n${orderLines(id, o)}\nStatus: waiting for delivery. You will get another message when it is ready.`);
+                    else tgSend(o.uid, `📥 <b>Order received</b>\n\n${orderBlock(id, o, 'Pending')}\n\nYou will get another message when it is ready.`);
                 } catch (e) {}
             })();
         }
@@ -677,7 +681,7 @@
                 tg.HapticFeedback?.notificationOccurred?.(hapticType);
             } catch (e) {}
             if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-                try { new Notification(title, { body: body || 'META SHOP', icon: getPaymentLogo('bkash') }); } catch (e) {}
+                try { new Notification(title, { body: body || 'META AI SHOP', icon: getPaymentLogo('bkash') }); } catch (e) {}
             }
         }
         function enableFullNotifications() {
@@ -983,7 +987,7 @@
             startSettings();
             onValue(ref(db, `users/${UID}/balance`), (sn) => {
                 curBal = Number(sn.val()) || 0;
-                document.getElementById('u-bal').innerText = curBal.toLocaleString();
+                document.getElementById('u-bal').innerText = curBal.toLocaleString(); const pb = document.getElementById('pay-bal'); if (pb) pb.innerText = curBal.toLocaleString();
             }, (err) => dbError('Wallet', err));
             let ready = false, prev = {};
             onValue(ref(db, 'deposits'), (sn) => {
@@ -1060,9 +1064,9 @@
         let curQty = 1, curMax = 10, curStock = 0;
         function refreshQty() {
             const t = Number(curPr) * curQty;
-            const qi = document.getElementById('qty-in'); qi.placeholder = 'Max ' + maxOrder; qi.max = maxOrder;
+            const qi = document.getElementById('qty-in'); const lim = Math.min(maxOrder, curStock); qi.placeholder = 'Max ' + lim; qi.max = lim;
             document.getElementById('qty-total').innerText = 'Total ৳' + t;
-            document.getElementById('qty-note').innerText = curStock >= curQty ? 'In stock - wallet orders are delivered instantly' : 'Low / no stock - admin will deliver manually';
+            document.getElementById('qty-note').innerText = 'In stock: ' + curStock + ' - instant delivery';
             document.getElementById('target-price').innerText = 'Total: ৳' + t + (curQty > 1 ? ` (${curQty} x ৳${curPr})` : '');
             document.getElementById('wallet-pay-btn').innerText = 'Pay ৳' + t + ' from wallet';
         }
@@ -1070,54 +1074,60 @@
             const qi = document.getElementById('qty-in'), raw = qi.value;
             if (raw === '') { curQty = 0; refreshQty(); return; }
             let n = Math.floor(Number(raw)); if (!(n >= 1)) n = 1;
-            if (n > maxOrder) { n = maxOrder; qi.value = n; notify('Max ' + maxOrder + ' per order', 'warning'); }
+            const lim = Math.min(maxOrder, curStock);
+            if (n > lim) { n = lim; qi.value = n; notify(curStock < maxOrder ? 'Only ' + curStock + ' in stock' : 'Max ' + maxOrder + ' per order', 'warning'); }
             curQty = n; refreshQty();
         };
         window.normQty = () => { if (!(curQty >= 1)) curQty = 1; document.getElementById('qty-in').value = curQty; refreshQty(); };
         window.goPay = async (n, p) => {
             curStock = 0;
             try { const sn = await get(ref(db, `vpns/${curVid}/stock`)); if (sn.exists()) curStock = Object.values(sn.val()).filter(x => x && x.email && x.pass).length; } catch (e) {}
-            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = maxOrder; document.getElementById('qty-in').value = 1;
+            if (curStock < 1) return notify('Out of stock', 'warning', 'This item is not available right now.');
+            curPl = n; curPr = Number(p); curMethod = ''; curQty = 1; curMax = Math.min(maxOrder, curStock);
+            document.getElementById('qty-in').value = 1;
             document.getElementById('plan-modal').style.display = 'none'; document.getElementById('pay-modal').style.display = 'flex';
-            document.getElementById('pay-details').classList.add('hidden'); document.getElementById('active-method-wrap').innerHTML = '';
-            document.querySelectorAll('#user-pay-options .pay-card').forEach(c2 => c2.classList.remove('active'));
             refreshQty();
         };
+        const ORDER_COOLDOWN_MS = 30000;
+        let payBusy = false;
         window.payWallet = async () => {
-            const total = Number(curPr) * curQty; if (!(curQty >= 1)) return notify('Enter quantity', 'warning');
-            if (!(total > 0)) return notify('Invalid price', 'error');
+            if (payBusy) return;
+            if (!(curQty >= 1)) return notify('Enter quantity', 'warning');
+            const total = Number(curPr) * curQty; if (!(total > 0)) return notify('Invalid price', 'error');
             if (curQty > maxOrder) return notify('Max ' + maxOrder + ' per order', 'warning');
+            payBusy = true;
             const refund = () => runTransaction(ref(db, `users/${UID}/balance`), (b) => (Number(b) || 0) + total);
             let claimed = [];
             const restore = async () => { for (const c of claimed) await set(ref(db, `vpns/${curVid}/stock/${c.key}`), { email: c.email, pass: c.pass }).catch(() => {}); claimed = []; };
             try {
+                const lo = Number((await get(ref(db, `users/${UID}/lastOrderAt`))).val()) || 0;
+                const wait = Math.ceil((ORDER_COOLDOWN_MS - (Date.now() - lo)) / 1000);
+                if (wait > 0) return notify('Please wait ' + wait + 's', 'warning', 'You can place 1 order every 30 seconds.');
+                const sn = await get(ref(db, `vpns/${curVid}/stock`));
+                if (sn.exists()) {
+                    const keys = Object.keys(sn.val()).filter(k => { const x = sn.val()[k]; return x && x.email && x.pass; });
+                    for (const k of keys) {
+                        if (claimed.length >= curQty) break;
+                        let taken = null;
+                        await runTransaction(ref(db, `vpns/${curVid}/stock/${k}`), (cur) => { taken = null; if (cur === null) return null; if (cur.email && cur.pass) { taken = cur; return null; } return; });
+                        if (taken) claimed.push({ key: k, email: taken.email, pass: taken.pass });
+                    }
+                }
+                if (claimed.length < curQty) { await restore(); return notify('Out of stock', 'warning', 'Not enough stock for this quantity.'); }
                 let ok = false;
                 await runTransaction(ref(db, `users/${UID}/balance`), (b) => { ok = false; b = Number(b) || 0; if (b < total) return; ok = true; return b - total; });
-                if (!ok) return notify('Not enough balance', 'warning', 'Add money first.');
-                try {
-                    const sn = await get(ref(db, `vpns/${curVid}/stock`));
-                    if (sn.exists()) {
-                        const keys = Object.keys(sn.val()).filter(k => { const x = sn.val()[k]; return x && x.email && x.pass; });
-                        for (const k of keys) {
-                            if (claimed.length >= curQty) break;
-                            let taken = null;
-                            await runTransaction(ref(db, `vpns/${curVid}/stock/${k}`), (cur) => { taken = null; if (cur === null) return null; if (cur.email && cur.pass) { taken = cur; return null; } return; });
-                            if (taken) claimed.push({ key: k, email: taken.email, pass: taken.pass });
-                        }
-                    }
-                } catch (e) {}
-                if (claimed.length < curQty) await restore();
+                if (!ok) { await restore(); return notify('Not enough balance', 'warning', 'Add money first.'); }
                 const now = new Date();
                 const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                const order = { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total, trx: 'WALLET', method: 'Wallet', uid: UID, user: UNAME, date: dateStr, st: 'Pending' };
-                const auto = claimed.length === curQty && curQty > 0;
-                if (auto) { const accounts = claimed.map(c => ({ email: c.email, pass: c.pass })); Object.assign(order, { st: 'Approved', email: accounts[0].email, pass: accounts[0].pass, accounts, auto: true }); }
+                const accounts = claimed.map(c => ({ email: c.email, pass: c.pass }));
+                const order = { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total, trx: 'WALLET', method: 'Wallet', uid: UID, user: UNAME, date: dateStr, st: 'Approved', email: accounts[0].email, pass: accounts[0].pass, accounts, auto: true };
                 try { const pr = await push(ref(db, 'orders'), order); onNewOrder(pr.key, order); }
                 catch (e) { await restore(); await refund(); throw e; }
+                set(ref(db, `users/${UID}/lastOrderAt`), Date.now()).catch(() => {});
                 document.getElementById('pay-modal').style.display = 'none';
-                if (auto) notify('Order delivered instantly', 'success', 'Check Orders for your account(s).');
-                else notify('Order placed from wallet', 'success', 'Out of stock - admin will deliver manually.');
+                notify('Order delivered instantly', 'success', 'Check Orders or your Telegram inbox.');
             } catch (err) { dbError('Wallet payment', err); }
+            finally { payBusy = false; }
         };
 
         window.nav = (pageId, btn) => {
@@ -1224,7 +1234,7 @@
         window.setPay = (n, m, logo = '', el = null) => { curMethod = n; document.querySelectorAll('.pay-card').forEach(card => card.classList.remove('active')); if(el) el.classList.add('active'); document.getElementById('active-num').innerText = m; document.getElementById('active-method-wrap').innerHTML = `<span class="active-method-pill">${logoMarkup(logo || getPaymentLogo(n), n)} ${esc(n)} selected</span>`; document.getElementById('pay-details').classList.remove('hidden'); notify(`${n} selected`, 'success'); };
         
         window.orderNow = () => {
-            const trx = document.getElementById('trx-id').value.trim(); if(!(curQty >= 1)) return notify('Enter quantity', 'warning'); if(!curMethod) return notify('Select payment method first', 'warning'); if(!trx) return notify('Enter Transaction ID', 'warning');
+            const trx = document.getElementById('trx-id').value.trim(); return notify('Only wallet payment is available', 'warning'); if(!(curQty >= 1)) return notify('Enter quantity', 'warning'); if(!curMethod) return notify('Select payment method first', 'warning'); if(!trx) return notify('Enter Transaction ID', 'warning');
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             const ord = { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total: curPr * curQty, trx: trx.toUpperCase(), method: curMethod, uid: UID, user: UNAME, st: "Pending", date: dateStr };
