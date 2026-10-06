@@ -451,6 +451,11 @@
     <div id="tg-lock" style="display:none;position:fixed;inset:0;z-index:10000;background:#020a1f;align-items:center;justify-content:center;padding:32px;text-align:center">
         <div class="card" style="max-width:340px"><i class="fa-brands fa-telegram" style="font-size:64px;color:#60a5fa"></i><h2 class="font-black text-xl mt-4">Open in Telegram</h2><p class="text-xs mt-2" style="color:#93a9cf">This store only works inside the Telegram Mini App.</p></div>
     </div>
+    <div id="order-loading" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(1,6,20,.74);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);align-items:center;justify-content:center;flex-direction:column;gap:16px;color:#fff">
+        <div id="ol-spin" class="loader-ring"></div>
+        <i id="ol-ok" class="fa-solid fa-circle-check" style="display:none;font-size:56px;color:#34d399"></i>
+        <b id="ol-text" class="text-sm">Placing your order...</b>
+    </div>
     <div id="order-modal" class="modal"><div class="sheet">
         <div class="flex justify-between items-center mb-4"><h3 class="font-black text-lg">Your Order</h3><button onclick="this.closest('.modal').style.display='none'">&times;</button></div>
         <div id="order-modal-body"></div>
@@ -595,6 +600,16 @@
             } else {
                 tgDoc(o.uid, String(o.vpn || 'order').replace(/[^\w\-]+/g, '_') + '_' + String(id).slice(-6) + '.txt', list.map(a => `${a.email}|${a.pass}`).join('\n') + '\n', head + '\n\n📝 Details information is in the attached file (Email|Password)' + foot);
             }
+        }
+        const depTag = (id) => '#DP-' + String(id).slice(-8);
+        function depBlock(id, d, status) {
+            return `🆔 Deposit ID: ${tgEsc(depTag(id))}\n💳 Method: ${tgEsc(d.method || '')}\n💵 Amount: ${money(d.amount)}\n🔖 TrxID: ${tgEsc(d.trx || '')}\n📊 Status: ${status}`;
+        }
+        function onNewDeposit(id, d) {
+            try {
+                adminIds().forEach(a => tgSend(a, `💰 <b>New Deposit Request</b>\n\n${depBlock(id, d, 'Pending')}\n👤 User: ${tgEsc(d.user || 'Guest')} (ID ${tgEsc(d.uid)})\n🕒 ${fmtNow()}`));
+                tgSend(d.uid, `📥 <b>Deposit Request Received</b>\n\n${depBlock(id, d, 'Pending')}\n\nWe will review it shortly.\n🤝 Thank you — META AI SHOP`);
+            } catch (e) {}
         }
         function onNewOrder(id, o) {
             (async () => {
@@ -1037,7 +1052,8 @@
             if (!trx) return notify('Enter Transaction ID', 'warning');
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-            push(ref(db, 'deposits'), { uid: UID, user: UNAME, method: depMethod, amount, trx: trx.toUpperCase(), st: 'Pending', date: dateStr }).then(() => {
+            const dep = { uid: UID, user: UNAME, method: depMethod, amount, trx: trx.toUpperCase(), st: 'Pending', date: dateStr };
+            push(ref(db, 'deposits'), dep).then((r) => { onNewDeposit(r.key, dep);
                 document.getElementById('dep-amount').value = ''; document.getElementById('dep-trx').value = ''; document.getElementById('dep-details').classList.add('hidden');
                 notify('Deposit request sent', 'success', 'Admin will review it.');
             }).catch(err => dbError('Deposit', err));
@@ -1046,17 +1062,20 @@
             if (!isAdmin()) return;
             try {
                 let won = false, info = null;
-                await runTransaction(ref(db, `deposits/${id}`), (d) => { won = false; if (d && d.st === 'Pending') { d.st = 'Approved'; won = true; info = { uid: d.uid, amount: Number(d.amount) }; } return d; });
+                await runTransaction(ref(db, `deposits/${id}`), (d) => { won = false; if (d && d.st === 'Pending') { d.st = 'Approved'; won = true; info = { uid: d.uid, amount: Number(d.amount), method: d.method, trx: d.trx }; } return d; });
                 if (!won) return notify('Already handled', 'warning');
-                await runTransaction(ref(db, `users/${info.uid}/balance`), (b) => (Number(b) || 0) + info.amount);
+                const br = await runTransaction(ref(db, `users/${info.uid}/balance`), (b) => (Number(b) || 0) + info.amount);
+                tgSend(info.uid, `✅ <b>Deposit Approved</b>\n\n${depBlock(id, info, 'Approved')}\n💼 New Balance: ${money(br.snapshot.val())}\n\n🕒 Approved On: ${fmtNow()}\n🤝 Thank you — META AI SHOP`);
                 notify('Deposit approved', 'success');
             } catch (err) { dbError('Approve deposit', err); }
         };
         window.rejectDeposit = async (id) => {
             if (!isAdmin()) return;
             try {
-                await runTransaction(ref(db, `deposits/${id}`), (d) => { if (d && d.st === 'Pending') d.st = 'Rejected'; return d; });
-                notify('Deposit rejected', 'success');
+                let won = false, info = null;
+                await runTransaction(ref(db, `deposits/${id}`), (d) => { won = false; if (d && d.st === 'Pending') { d.st = 'Rejected'; won = true; info = { uid: d.uid, amount: d.amount, method: d.method, trx: d.trx }; } return d; });
+                if (won) tgSend(info.uid, `❌ <b>Deposit Rejected</b>\n\n${depBlock(id, info, 'Rejected')}\n\nPlease contact support if you already paid.\n🤝 META AI SHOP`);
+                notify(won ? 'Deposit rejected' : 'Already handled', won ? 'success' : 'warning');
             } catch (err) { dbError('Reject deposit', err); }
         };
 
@@ -1088,46 +1107,50 @@
             document.getElementById('plan-modal').style.display = 'none'; document.getElementById('pay-modal').style.display = 'flex';
             refreshQty();
         };
-        const ORDER_COOLDOWN_MS = 30000;
-        let payBusy = false;
+        let payBusy = false, olTimer = null;
+        const showOL = (t) => { clearTimeout(olTimer); document.getElementById('ol-text').innerText = t; document.getElementById('ol-spin').style.display = ''; document.getElementById('ol-ok').style.display = 'none'; document.getElementById('order-loading').style.display = 'flex'; };
+        const hideOL = () => { clearTimeout(olTimer); document.getElementById('order-loading').style.display = 'none'; };
+        const doneOL = (t) => { document.getElementById('ol-text').innerText = t; document.getElementById('ol-spin').style.display = 'none'; document.getElementById('ol-ok').style.display = ''; olTimer = setTimeout(hideOL, 1000); };
         window.payWallet = async () => {
             if (payBusy) return;
             if (!(curQty >= 1)) return notify('Enter quantity', 'warning');
             const total = Number(curPr) * curQty; if (!(total > 0)) return notify('Invalid price', 'error');
             if (curQty > maxOrder) return notify('Max ' + maxOrder + ' per order', 'warning');
-            payBusy = true;
+            payBusy = true; showOL('Placing your order...');
+            const btn = document.getElementById('wallet-pay-btn'); btn.disabled = true;
             const refund = () => runTransaction(ref(db, `users/${UID}/balance`), (b) => (Number(b) || 0) + total);
-            let claimed = [];
-            const restore = async () => { for (const c of claimed) await set(ref(db, `vpns/${curVid}/stock/${c.key}`), { email: c.email, pass: c.pass }).catch(() => {}); claimed = []; };
+            let claimed = [], done = false;
+            const restore = () => Promise.all(claimed.map(c => set(ref(db, `vpns/${curVid}/stock/${c.key}`), { email: c.email, pass: c.pass }).catch(() => {}))).then(() => { claimed = []; });
+            const claim = async (k) => {
+                let taken = null;
+                await runTransaction(ref(db, `vpns/${curVid}/stock/${k}`), (cur) => { taken = null; if (cur === null) return null; if (cur.email && cur.pass) { taken = cur; return null; } return; });
+                return taken ? { key: k, email: taken.email, pass: taken.pass } : null;
+            };
+            const fail = (title, body) => { hideOL(); notify(title, 'warning', body); };
             try {
-                const lo = Number((await get(ref(db, `users/${UID}/lastOrderAt`))).val()) || 0;
-                const wait = Math.ceil((ORDER_COOLDOWN_MS - (Date.now() - lo)) / 1000);
-                if (wait > 0) return notify('Please wait ' + wait + 's', 'warning', 'You can place 1 order every 30 seconds.');
                 const sn = await get(ref(db, `vpns/${curVid}/stock`));
-                if (sn.exists()) {
-                    const keys = Object.keys(sn.val()).filter(k => { const x = sn.val()[k]; return x && x.email && x.pass; });
-                    for (const k of keys) {
-                        if (claimed.length >= curQty) break;
-                        let taken = null;
-                        await runTransaction(ref(db, `vpns/${curVid}/stock/${k}`), (cur) => { taken = null; if (cur === null) return null; if (cur.email && cur.pass) { taken = cur; return null; } return; });
-                        if (taken) claimed.push({ key: k, email: taken.email, pass: taken.pass });
-                    }
+                const keys = sn.exists() ? Object.keys(sn.val()).filter(k => { const x = sn.val()[k]; return x && x.email && x.pass; }) : [];
+                if (keys.length < curQty) return fail('Out of stock', 'Not enough stock for this quantity.');
+                let idx = 0;
+                while (claimed.length < curQty && idx < keys.length) {
+                    const batch = keys.slice(idx, idx + (curQty - claimed.length)); idx += batch.length;
+                    (await Promise.all(batch.map(claim))).forEach(c => { if (c) claimed.push(c); });
                 }
-                if (claimed.length < curQty) { await restore(); return notify('Out of stock', 'warning', 'Not enough stock for this quantity.'); }
+                if (claimed.length < curQty) { await restore(); return fail('Out of stock', 'Not enough stock for this quantity.'); }
                 let ok = false;
                 await runTransaction(ref(db, `users/${UID}/balance`), (b) => { ok = false; b = Number(b) || 0; if (b < total) return; ok = true; return b - total; });
-                if (!ok) { await restore(); return notify('Not enough balance', 'warning', 'Add money first.'); }
+                if (!ok) { await restore(); return fail('Not enough balance', 'Add money first.'); }
                 const now = new Date();
                 const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
                 const accounts = claimed.map(c => ({ email: c.email, pass: c.pass }));
                 const order = { vpn: curV, vpn_id: curVid, plan: curPl, price: curPr, qty: curQty, total, trx: 'WALLET', method: 'Wallet', uid: UID, user: UNAME, date: dateStr, st: 'Approved', email: accounts[0].email, pass: accounts[0].pass, accounts, auto: true };
                 try { const pr = await push(ref(db, 'orders'), order); onNewOrder(pr.key, order); }
                 catch (e) { await restore(); await refund(); throw e; }
-                set(ref(db, `users/${UID}/lastOrderAt`), Date.now()).catch(() => {});
+                done = true;
                 document.getElementById('pay-modal').style.display = 'none';
-                notify('Order delivered instantly', 'success', 'Check Orders or your Telegram inbox.');
-            } catch (err) { dbError('Wallet payment', err); }
-            finally { payBusy = false; }
+                doneOL('Order completed!');
+            } catch (err) { hideOL(); dbError('Wallet payment', err); }
+            finally { payBusy = false; btn.disabled = false; if (!done) hideOL(); }
         };
 
         window.nav = (pageId, btn) => {
