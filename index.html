@@ -383,7 +383,7 @@
             <div id="adm-deposits" class="adm-content hidden space-y-4"></div>
             <div id="adm-config" class="adm-content hidden space-y-4">
                 <div class="card space-y-3"><b class="text-xs">Max order limit (per order)</b><p class="text-[10px] text-slate-400 font-bold">Highest quantity a user can buy in one order.</p>
-                    <div class="flex gap-2"><input type="number" id="cfg-max" min="1" max="100" value="10" class="adm-mini-input" style="padding:12px;font-size:13px"><button onclick="saveMaxOrder()" class="btn-p" style="width:auto;padding:10px 20px;font-size:11px">Save</button></div></div>
+                    <div class="flex gap-2"><input type="number" id="cfg-max" min="1" value="10" class="adm-mini-input" style="padding:12px;font-size:13px"><button onclick="saveMaxOrder()" class="btn-p" style="width:auto;padding:10px 20px;font-size:11px">Save</button></div></div>
                 <div class="card space-y-3"><b class="text-xs">Admins</b>
                     <div id="admin-list" class="space-y-2"></div>
                     <div id="admin-add" class="flex gap-2 hidden"><input type="number" id="new-admin-id" placeholder="Telegram ID" class="adm-mini-input" style="padding:12px;font-size:13px"><button onclick="addAdmin()" class="btn-p" style="width:auto;padding:10px 20px;font-size:11px">Add</button></div>
@@ -920,7 +920,7 @@
         window.saveMaxOrder = async () => {
             if (!isAdmin()) return;
             const n = Math.floor(Number(document.getElementById('cfg-max').value));
-            if (!(n >= 1 && n <= 100)) return notify('Enter a number from 1 to 100', 'warning');
+            if (!(n >= 1)) return notify('Enter a number, 1 or more', 'warning');
             try { await set(ref(db, 'settings/maxOrder'), n); notify('Max order limit saved', 'success', 'Users can buy up to ' + n + ' per order.'); }
             catch (err) { dbError('Save limit', err); }
         };
